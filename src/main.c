@@ -24,6 +24,15 @@ static bootloader_config_t g_config;
 
 /* Using SysTick instead of TIM6 */
 
+/* Private function prototypes -----------------------------------------------*/
+static void SystemClock_Config(void);
+static void LED_Init(void);
+static void Network_Init(void);
+static void Jump_To_Application(uint32_t app_address);
+static int Check_For_Crash(void);
+static void Clear_Crash_Marker(void);
+void Error_Handler(void);
+
 /**
  * @brief Initialize GPIO for LEDs
  */
