@@ -1,0 +1,10 @@
+ 
+build/
+.project_url
+.pe-project-tools-config.ini
+CMakeUserPresets.json
+.vscode/
+.idea/
+.pe-project-tools-extra-cmake-flags.cmake
+error*
+output
