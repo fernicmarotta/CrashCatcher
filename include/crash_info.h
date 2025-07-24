@@ -72,15 +72,26 @@ typedef struct {
     /* Additional info */
     uint32_t lr_at_fault;       /* 0x74: LR value at exception entry */
     uint32_t app_version;       /* 0x78: Application version/build */
-    uint32_t reserved[2];       /* 0x7C: Reserved for future use */
+    
+    /* Control registers - Cortex-M7 specific */
+    uint32_t control;           /* 0x7C: CONTROL register */
+    uint32_t basepri;           /* 0x80: BASEPRI register */
+    uint32_t primask;           /* 0x84: PRIMASK register */
+    uint32_t faultmask;         /* 0x88: FAULTMASK register */
+    uint32_t fpscr;             /* 0x8C: FPSCR (FPU Status Control) */
+    
+    /* NVIC state - first 32 interrupts (most common) */
+    uint32_t nvic_iser0;        /* 0x90: Interrupt Set Enable Register 0 */
+    uint32_t nvic_ispr0;        /* 0x94: Interrupt Set Pending Register 0 */
+    uint32_t nvic_iabr0;        /* 0x98: Interrupt Active Bit Register 0 */
     
     /* Checksum */
-    uint32_t checksum;          /* 0x84: CRC32 of all above fields */
+    uint32_t checksum;          /* 0x9C: CRC32 of all above fields */
     
 } crash_info_t;
 
 /* Ensure structure is exactly the size we expect */
-_Static_assert(sizeof(crash_info_t) == 0x88, "crash_info_t size mismatch");
+_Static_assert(sizeof(crash_info_t) == 0xA0, "crash_info_t size mismatch");
 
 /* Pointer to crash info in Backup SRAM */
 #define CRASH_INFO          ((volatile crash_info_t*)BACKUP_SRAM_BASE)

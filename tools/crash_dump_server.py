@@ -207,6 +207,29 @@ class CrashDumpServer:
                 line += f"{reg:3}: 0x{self.registers[reg]:08X}  "
         print(line)
         
+        # Show MSP and PSP
+        stack_regs = ['MSP', 'PSP']
+        line = ""
+        for reg in stack_regs:
+            if reg in self.registers:
+                line += f"{reg:3}: 0x{self.registers[reg]:08X}  "
+        if line:
+            print(line)
+        
+        # Show control registers
+        control_regs = ['CONTROL', 'BASEPRI', 'PRIMASK', 'FAULTMASK', 'FPSCR']
+        print("\nCONTROL REGISTERS:")
+        print("-" * 40)
+        for reg in control_regs:
+            if reg in self.registers:
+                print(f"{reg:10}: 0x{self.registers[reg]:08X}")
+        
+        # Show NVIC state
+        if 'NVIC_ISER0' in self.registers:
+            print("\nNVIC STATE:")
+            print("-" * 40)
+            print(f"NVIC_ISER0: 0x{self.registers['NVIC_ISER0']:08X} (Enabled interrupts)")
+        
         print("\nFAULT REGISTERS:")
         print("-" * 40)
         fault_regs = ['HFSR', 'CFSR', 'MMFAR', 'BFAR', 'AFSR']
@@ -618,6 +641,12 @@ class CrashDumpServer:
             # Write prstatus at expected offset
             dump_data[reg_offset:reg_offset + len(prstatus)] = prstatus
             
+            # Write MSP and PSP after prstatus for easy access
+            # These are the actual stack pointers from the crash
+            msp_psp_offset = reg_offset + len(prstatus)
+            struct.pack_into('<I', dump_data, msp_psp_offset, self.registers.get('MSP', 0) & 0xFFFFFFFF)
+            struct.pack_into('<I', dump_data, msp_psp_offset + 4, self.registers.get('PSP', 0) & 0xFFFFFFFF)
+            
             # Write to file
             f.write(dump_data)
             
@@ -652,7 +681,16 @@ class CrashDumpServer:
             f.write(f"set $sp = 0x{self.registers.get('SP', 0) & 0xFFFFFFFF:08X}\n")
             f.write(f"set $lr = 0x{self.registers.get('LR', 0) & 0xFFFFFFFF:08X}\n")
             f.write(f"set $pc = 0x{self.registers.get('PC', 0) & 0xFFFFFFFF:08X}\n")
-            f.write(f"set $xpsr = 0x{self.registers.get('PSR', 0) & 0xFFFFFFFF:08X}\n\n")
+            f.write(f"set $xpsr = 0x{self.registers.get('PSR', 0) & 0xFFFFFFFF:08X}\n")
+            f.write(f"set $msp = 0x{self.registers.get('MSP', 0) & 0xFFFFFFFF:08X}\n")
+            f.write(f"set $psp = 0x{self.registers.get('PSP', 0) & 0xFFFFFFFF:08X}\n")
+            
+            # Control registers
+            f.write(f"set $control = 0x{self.registers.get('CONTROL', 0) & 0xFFFFFFFF:08X}\n")
+            f.write(f"set $basepri = 0x{self.registers.get('BASEPRI', 0) & 0xFFFFFFFF:08X}\n")
+            f.write(f"set $primask = 0x{self.registers.get('PRIMASK', 0) & 0xFFFFFFFF:08X}\n")
+            f.write(f"set $faultmask = 0x{self.registers.get('FAULTMASK', 0) & 0xFFFFFFFF:08X}\n")
+            f.write(f"set $fpscr = 0x{self.registers.get('FPSCR', 0) & 0xFFFFFFFF:08X}\n\n")
             
             # Memory regions (optional - may fail if target memory is protected)
             f.write("# Enable all STM32H7 power domains first\n")

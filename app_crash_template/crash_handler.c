@@ -94,6 +94,30 @@ void crash_handler_common(uint32_t msp_value, uint32_t psp_value, uint32_t exc_r
     /* Application version - set your version here */
     crash_info->app_version = 0x01000000; /* 1.0.0.0 */
     
+    /* Read control registers */
+    __asm volatile(
+        "mrs %0, CONTROL    \n"
+        "mrs %1, BASEPRI    \n"
+        "mrs %2, PRIMASK    \n"
+        "mrs %3, FAULTMASK  \n"
+        : "=r"(crash_info->control),
+          "=r"(crash_info->basepri),
+          "=r"(crash_info->primask),
+          "=r"(crash_info->faultmask)
+    );
+    
+    /* Read FPSCR if FPU is present */
+    #if (__FPU_PRESENT == 1) && (__FPU_USED == 1)
+    __asm volatile("vmrs %0, FPSCR" : "=r"(crash_info->fpscr));
+    #else
+    crash_info->fpscr = 0;
+    #endif
+    
+    /* Read NVIC state - first 32 interrupts (covers most peripherals) */
+    crash_info->nvic_iser0 = NVIC->ISER[0];  /* Which interrupts are enabled */
+    crash_info->nvic_ispr0 = NVIC->ISPR[0];  /* Which interrupts are pending */
+    crash_info->nvic_iabr0 = NVIC->IABR[0];  /* Which interrupts are active */
+    
     /* Simple checksum (XOR of all fields except checksum itself) */
     uint32_t checksum = 0;
     uint32_t* ptr = (uint32_t*)crash_info;
@@ -106,8 +130,23 @@ void crash_handler_common(uint32_t msp_value, uint32_t psp_value, uint32_t exc_r
 
     /* Ensure all writes complete */
     __DSB();
-    SCB_CleanInvalidateDCache();
+    
+    /* Clean D-Cache to ensure all modified data is written back to RAM */
+    SCB_CleanDCache();
+    
+    /* Invalidate D-Cache to ensure no stale data remains */
+    SCB_InvalidateDCache();
+    
+    /* Clean and invalidate I-Cache as well */
+    SCB_InvalidateICache();
+    
+    /* Disable both caches before reset to ensure bootloader starts clean */
+    SCB_DisableDCache();
+    SCB_DisableICache();
+    
+    /* Final barrier to ensure all operations complete */
     __DSB();
+    __ISB();
 
     /* System reset to jump to bootloader */
     NVIC_SystemReset();

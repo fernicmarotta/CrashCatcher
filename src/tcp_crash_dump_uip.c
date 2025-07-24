@@ -23,6 +23,7 @@ typedef enum {
     STATE_CONNECTED,
     STATE_SENDING_HEADER,
     STATE_SENDING_REGISTERS,
+    STATE_SENDING_NVIC_INFO,
     STATE_SENDING_MEMORY,
     STATE_SENDING_FOOTER,
     STATE_CLOSING,
@@ -69,7 +70,8 @@ static const ram_region_t ram_regions[] = {
 static const char* register_names[] = {
     "R0", "R1", "R2", "R3", "R4", "R5", "R6", "R7",
     "R8", "R9", "R10", "R11", "R12", "SP", "LR", "PC",
-    "PSR", "HFSR", "CFSR", "MMFAR", "BFAR", "AFSR"
+    "PSR", "MSP", "PSP", "CONTROL", "BASEPRI", "PRIMASK", 
+    "FAULTMASK", "FPSCR", "HFSR", "CFSR", "MMFAR", "BFAR", "AFSR", "NVIC_ISER0"
 };
 
 static void format_hex_byte(char *out, uint8_t byte);
@@ -239,7 +241,7 @@ void tcp_crash_dump_appcall(void) {
         case STATE_SENDING_REGISTERS:
             if (dump_state.send_buffer_pos >= dump_state.send_buffer_len) {
                 /* Prepare next register */
-                if (dump_state.current_region < 22) {  /* 22 registers total */
+                if (dump_state.current_region < 30) {  /* 30 registers total */
                     char line[64];
                     uint32_t value = 0;
                     
@@ -262,11 +264,19 @@ void tcp_crash_dump_appcall(void) {
                         case 14: value = dump_state.crash_info.lr; break;
                         case 15: value = dump_state.crash_info.pc; break;
                         case 16: value = dump_state.crash_info.psr; break;
-                        case 17: value = dump_state.crash_info.hfsr; break;
-                        case 18: value = dump_state.crash_info.cfsr; break;
-                        case 19: value = dump_state.crash_info.mmfar; break;
-                        case 20: value = dump_state.crash_info.bfar; break;
-                        case 21: value = dump_state.crash_info.afsr; break;
+                        case 17: value = dump_state.crash_info.msp; break;
+                        case 18: value = dump_state.crash_info.psp; break;
+                        case 19: value = dump_state.crash_info.control; break;
+                        case 20: value = dump_state.crash_info.basepri; break;
+                        case 21: value = dump_state.crash_info.primask; break;
+                        case 22: value = dump_state.crash_info.faultmask; break;
+                        case 23: value = dump_state.crash_info.fpscr; break;
+                        case 24: value = dump_state.crash_info.hfsr; break;
+                        case 25: value = dump_state.crash_info.cfsr; break;
+                        case 26: value = dump_state.crash_info.mmfar; break;
+                        case 27: value = dump_state.crash_info.bfar; break;
+                        case 28: value = dump_state.crash_info.afsr; break;
+                        case 29: value = dump_state.crash_info.nvic_iser0; break;
                     }
                     
                     snprintf(line, sizeof(line), "%s: ", register_names[dump_state.current_region]);
@@ -276,7 +286,32 @@ void tcp_crash_dump_appcall(void) {
                     prepare_string(line);
                     dump_state.current_region++;
                 } else {
-                    /* Registers done, start memory dump */
+                    /* Basic registers done, send NVIC state info */
+                    prepare_string("\r\nNVIC STATE:\r\n");
+                    dump_state.state = STATE_SENDING_NVIC_INFO;
+                    dump_state.current_region = 0;
+                }
+            }
+            break;
+            
+        case STATE_SENDING_NVIC_INFO:
+            if (dump_state.send_buffer_pos >= dump_state.send_buffer_len) {
+                if (dump_state.current_region == 0) {
+                    /* Send NVIC pending interrupts */
+                    char line[80];
+                    snprintf(line, sizeof(line), "NVIC_ISPR0: 0x%08X (Pending interrupts)", 
+                             dump_state.crash_info.nvic_ispr0);
+                    prepare_string(line);
+                    dump_state.current_region++;
+                } else if (dump_state.current_region == 1) {
+                    /* Send NVIC active interrupts */
+                    char line[80];
+                    snprintf(line, sizeof(line), "NVIC_IABR0: 0x%08X (Active interrupts)", 
+                             dump_state.crash_info.nvic_iabr0);
+                    prepare_string(line);
+                    dump_state.current_region++;
+                } else {
+                    /* NVIC info done, start memory dump */
                     prepare_string("\r\nMemory dump:\r\n");
                     dump_state.state = STATE_SENDING_MEMORY;
                     dump_state.current_region = 0;

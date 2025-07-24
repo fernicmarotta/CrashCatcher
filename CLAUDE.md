@@ -83,11 +83,11 @@ pe-core-dump/
 The system uses a bootloader architecture to handle crashes safely:
 
 #### Memory Layout
-- **0x08000000 - 0x0801FFFF**: Bootloader (128KB)
-- **0x08020000 - 0x081FFFFF**: Application (1920KB)
+- **0x08000000 - 0x0800FFFF**: Bootloader (64KB)
+- **0x08010000 - 0x081FFFFF**: Application (1984KB)
 
 #### Operation Flow
-1. **Normal Operation**: App runs from 0x08020000
+1. **Normal Operation**: App runs from 0x08010000
 2. **Crash Occurs**: 
    - Minimal fault handler saves critical info to Backup SRAM
    - Immediate system reset
@@ -97,6 +97,12 @@ The system uses a bootloader architecture to handle crashes safely:
    - Sends complete RAM dump via TCP
    - Clears crash marker
 4. **Jump to Application**
+
+#### IMPORTANT: How This Works
+- **pe-core-dump IS the bootloader** that RECEIVES crashes from OTHER applications
+- **Other applications** (like nb_combiner) implement their crash handler using app_crash_template
+- **app_crash_template/** shows how applications should save crash info to Backup SRAM
+- The bootloader reads this info after reset and sends it via TCP
 
 ### Memory Configuration
 
