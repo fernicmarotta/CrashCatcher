@@ -115,17 +115,6 @@ SECTIONS
         _edata = .;
     } > ITCMRAM AT> FLASH
 
-    /* Ethernet descriptors - in ITCM */
-    .eth_descriptors (NOLOAD) :
-    {
-        . = ALIGN(4);
-        *(.RxDecripSection)
-        *(.TxDecripSection)
-        *(.RxArraySection)
-        *(.TxArraySection)
-        . = ALIGN(4);
-    } > ITCMRAM
-
     /* Uninitialized data - in ITCM ONLY */
     .bss :
     {
@@ -150,6 +139,35 @@ SECTIONS
         . = . + _Min_Stack_Size;
         . = ALIGN(8);
     } > ITCMRAM
+    
+    /* Ethernet DMA descriptors in SRAM3 */
+    .RxDecripSection 0x30040000 (NOLOAD) :
+    {
+        . = ALIGN(4);
+        *(.RxDecripSection)
+        . = ALIGN(4);
+    } > SRAM3
+    
+    .TxDecripSection 0x30040060 (NOLOAD) :
+    {
+        . = ALIGN(4);
+        *(.TxDecripSection)
+        . = ALIGN(4);
+    } > SRAM3
+    
+    .RxArraySection 0x30040200 (NOLOAD) :
+    {
+        . = ALIGN(4);
+        *(.RxArraySection)
+        . = ALIGN(4);
+    } > SRAM3
+    
+    .TxArraySection 0x30042000 (NOLOAD) :
+    {
+        . = ALIGN(4);
+        *(.TxArraySection)
+        . = ALIGN(4);
+    } > SRAM3
 
     /* Remove information from the standard libraries */
     /DISCARD/ :

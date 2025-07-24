@@ -12,7 +12,19 @@
 
 jump_to_application_asm:
     /* r0 contains the application address */
-    ldr sp, [r0]        /* Load stack pointer from vector table */
-    ldr pc, [r0, #04]   /* Load PC with reset handler - exactly like working bootloader */
+    /* Clear PRIMASK to ensure interrupts can be enabled by app */
+    cpsie i
+    
+    /* Load new stack pointer */
+    ldr sp, [r0]
+    
+    /* Load reset handler address */
+    ldr r1, [r0, #4]
+    
+    /* Ensure THUMB bit is set */
+    orr r1, r1, #1
+    
+    /* Jump to application reset handler */
+    bx r1
 
 .size jump_to_application_asm, .-jump_to_application_asm

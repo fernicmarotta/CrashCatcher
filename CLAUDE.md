@@ -30,8 +30,9 @@ pe-core-dump is a STM32H743-based crash dump system that integrates:
 # Build everything
 pe-ccpp-tool build
 
-# Clean build
-pe-ccpp-tool clean
+# IMPORTANT: pe-ccpp-tool clean DOES NOT EXIST!
+# To clean, use:
+rm -rf build
 pe-ccpp-tool build
 
 # Flash application
@@ -82,11 +83,11 @@ pe-core-dump/
 The system uses a bootloader architecture to handle crashes safely:
 
 #### Memory Layout
-- **0x08000000 - 0x0800FFFF**: Bootloader (64KB)
-- **0x08010000 - 0x081FFFFF**: Application (1984KB)
+- **0x08000000 - 0x0801FFFF**: Bootloader (128KB)
+- **0x08020000 - 0x081FFFFF**: Application (1920KB)
 
 #### Operation Flow
-1. **Normal Operation**: App runs from 0x08010000
+1. **Normal Operation**: App runs from 0x08020000
 2. **Crash Occurs**: 
    - Minimal fault handler saves critical info to Backup SRAM
    - Immediate system reset
@@ -151,7 +152,7 @@ make flash-bootloader
 # Flash application
 pe-ccpp-tool flash
 # or manually:
-st-flash write CORTEX_COREDUMP.bin 0x08010000
+st-flash write CORTEX_COREDUMP.bin 0x08020000
 ```
 
 ## Network Configuration

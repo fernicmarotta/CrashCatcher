@@ -260,6 +260,20 @@ void SystemInit (void)
    * 24us. During this time the others FMC master (such as LTDC) cannot use it!
    */
   FMC_Bank1_R->BTCR[0] = 0x000030D2;
+  
+  /* Enable all RAM domains for crash dump functionality */
+  /* Enable D2 domain SRAMs */
+  RCC->AHB2ENR |= RCC_AHB2ENR_D2SRAM1EN | RCC_AHB2ENR_D2SRAM2EN | RCC_AHB2ENR_D2SRAM3EN;
+  
+  /* Enable Backup SRAM - SRAM4 doesn't have a separate enable on STM32H743 */
+  RCC->AHB4ENR |= RCC_AHB4ENR_BKPRAMEN;
+  
+  /* Enable backup domain access */
+  PWR->CR1 |= PWR_CR1_DBP;
+  
+  /* Small delay to ensure clocks are stable */
+  __IO uint32_t tmpreg2 = RCC->AHB2ENR;
+  (void) tmpreg2;
 
   /* Configure the Vector Table location add offset address for cortex-M7 ------------------*/
 #ifdef VECT_TAB_SRAM

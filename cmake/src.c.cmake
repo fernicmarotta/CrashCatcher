@@ -11,33 +11,26 @@ set(CC_SRC_STM32_FILES
         
         # GPIO
         "${USER_PATH}/Keil/STM32H7xx_DFP/${STM32H7XX_DFP}/Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_gpio.c"
+        
+        # Ethernet
+        "${USER_PATH}/Keil/STM32H7xx_DFP/${STM32H7XX_DFP}/Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_eth.c"
+        "${USER_PATH}/Keil/STM32H7xx_DFP/${STM32H7XX_DFP}/Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_eth_ex.c"
 )
-#/home/fnicolas/.wine/drive_c/users/fnicolas/AppData/Local/Arm/Packs/lwIP/lwIP
-set(LWIP "${USER_PATH}/lwIP/lwIP/")
-
 include(cmake/${CMAKE_C_COMPILER_ID}/src.c.cmake)
 
-# Include lwIP sources
+# Include uIP sources
 include(cmake/lwip.cmake)
 
 # CrashCatcher sources
 set(CC_SRC_CRASHCATCHER
     ${CMAKE_CURRENT_SOURCE_DIR}/CrashCatcher/Core/src/CrashCatcher.c
     ${CMAKE_CURRENT_SOURCE_DIR}/CrashCatcher/Core/src/CrashCatcher_armv7m.S
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/CrashCatcher_hooks.c
 )
 
-# NO Ethernet CMSIS drivers - using STM32H7 HAL directly
-# set(CC_SRC_ETH_DRIVERS
-#     ${USER_PATH}/ARM/CMSIS-Driver/${ARM_CMSIS_DRIVER}/Ethernet_PHY/DP83848C/PHY_DP83848C.c
-#     ${CMAKE_CURRENT_SOURCE_DIR}/src/eth_driver/ETH_STM32H7xx.c
-# )
-
-# TcpDump sources for CrashCatcher
-set(CC_SRC_TCPDUMP
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/TcpDump/tcp_crash_dump.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/TcpDump/tcp_crash_dump_config.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/lwip/sys_arch.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/lwip/ethernetif_minimal.c
+# Ethernet HAL configuration from nube_bootloader
+set(CC_SRC_ETH_HAL
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/drivers/eth.c
 )
 
 # System sources
@@ -49,5 +42,5 @@ set(CC_SRC_SYSTEM
     ${CMAKE_CURRENT_SOURCE_DIR}/src/jump_to_app.S
 )
 
-set(CC_SRC_FILES ${CC_SRC_FILES} ${CC_SRC_STM32_FILES} ${CC_SRC_CRASHCATCHER} ${CC_SRC_TCPDUMP} ${CC_SRC_SYSTEM})
+set(CC_SRC_FILES ${CC_SRC_FILES} ${CC_SRC_STM32_FILES} ${CC_SRC_CRASHCATCHER} ${CC_SRC_SYSTEM} ${CC_SRC_ETH_HAL})
 
