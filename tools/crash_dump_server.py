@@ -679,7 +679,11 @@ class CrashDumpServer:
             
             for region_name, info in region_mapping.items():
                 f.write(f"echo Restoring {region_name}...\\n\n")
-                f.write(f"restore {bin_filename} binary 0x{info['addr']:08x} 0x{info['start']:x} 0x{info['end']:x}\n\n")
+                # The restore command syntax is: restore file binary BIAS start end
+                # BIAS is SUBTRACTED from the destination address
+                # So to load at addr from file offset start, BIAS = addr - start
+                bias = info['addr'] - info['start']
+                f.write(f"restore {bin_filename} binary 0x{bias:08x} 0x{info['start']:x} 0x{info['end']:x}\n\n")
             
             # Show final state
             f.write("# Show restored state\n")
