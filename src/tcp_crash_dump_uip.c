@@ -35,7 +35,7 @@ typedef struct {
     tcp_state_t state;
     uint8_t *current_ptr;         /* Current memory pointer */
     size_t bytes_remaining;       /* Bytes remaining in current region */
-    crash_info_t crash_info;
+    crash_info_t *crash_info;      /* Pointer to crash info in backup SRAM */
     uint32_t connect_start_time;  /* Time when connection started */
     uint32_t last_activity_time;  /* Last time we had network activity */
     char send_buffer[256];        /* Buffer for formatted output */
@@ -90,8 +90,8 @@ int tcp_crash_dump_start(crash_info_t *crash_info) {
         return -1;
     }
     
-    /* Copy crash info */
-    memcpy(&dump_state.crash_info, crash_info, sizeof(crash_info_t));
+    /* Save pointer to crash info (no copy needed) */
+    dump_state.crash_info = crash_info;
     
     /* Initialize state */
     dump_state.current_region = -1;
@@ -247,36 +247,36 @@ void tcp_crash_dump_appcall(void) {
                     
                     /* Get register value */
                     switch (dump_state.current_region) {
-                        case 0: value = dump_state.crash_info.r0; break;
-                        case 1: value = dump_state.crash_info.r1; break;
-                        case 2: value = dump_state.crash_info.r2; break;
-                        case 3: value = dump_state.crash_info.r3; break;
-                        case 4: value = dump_state.crash_info.r4; break;
-                        case 5: value = dump_state.crash_info.r5; break;
-                        case 6: value = dump_state.crash_info.r6; break;
-                        case 7: value = dump_state.crash_info.r7; break;
-                        case 8: value = dump_state.crash_info.r8; break;
-                        case 9: value = dump_state.crash_info.r9; break;
-                        case 10: value = dump_state.crash_info.r10; break;
-                        case 11: value = dump_state.crash_info.r11; break;
-                        case 12: value = dump_state.crash_info.r12; break;
-                        case 13: value = dump_state.crash_info.sp; break;
-                        case 14: value = dump_state.crash_info.lr; break;
-                        case 15: value = dump_state.crash_info.pc; break;
-                        case 16: value = dump_state.crash_info.psr; break;
-                        case 17: value = dump_state.crash_info.msp; break;
-                        case 18: value = dump_state.crash_info.psp; break;
-                        case 19: value = dump_state.crash_info.control; break;
-                        case 20: value = dump_state.crash_info.basepri; break;
-                        case 21: value = dump_state.crash_info.primask; break;
-                        case 22: value = dump_state.crash_info.faultmask; break;
-                        case 23: value = dump_state.crash_info.fpscr; break;
-                        case 24: value = dump_state.crash_info.hfsr; break;
-                        case 25: value = dump_state.crash_info.cfsr; break;
-                        case 26: value = dump_state.crash_info.mmfar; break;
-                        case 27: value = dump_state.crash_info.bfar; break;
-                        case 28: value = dump_state.crash_info.afsr; break;
-                        case 29: value = dump_state.crash_info.nvic_iser0; break;
+                        case 0: value = dump_state.crash_info->r0; break;
+                        case 1: value = dump_state.crash_info->r1; break;
+                        case 2: value = dump_state.crash_info->r2; break;
+                        case 3: value = dump_state.crash_info->r3; break;
+                        case 4: value = dump_state.crash_info->r4; break;
+                        case 5: value = dump_state.crash_info->r5; break;
+                        case 6: value = dump_state.crash_info->r6; break;
+                        case 7: value = dump_state.crash_info->r7; break;
+                        case 8: value = dump_state.crash_info->r8; break;
+                        case 9: value = dump_state.crash_info->r9; break;
+                        case 10: value = dump_state.crash_info->r10; break;
+                        case 11: value = dump_state.crash_info->r11; break;
+                        case 12: value = dump_state.crash_info->r12; break;
+                        case 13: value = dump_state.crash_info->sp; break;
+                        case 14: value = dump_state.crash_info->lr; break;
+                        case 15: value = dump_state.crash_info->pc; break;
+                        case 16: value = dump_state.crash_info->psr; break;
+                        case 17: value = dump_state.crash_info->msp; break;
+                        case 18: value = dump_state.crash_info->psp; break;
+                        case 19: value = dump_state.crash_info->control; break;
+                        case 20: value = dump_state.crash_info->basepri; break;
+                        case 21: value = dump_state.crash_info->primask; break;
+                        case 22: value = dump_state.crash_info->faultmask; break;
+                        case 23: value = dump_state.crash_info->fpscr; break;
+                        case 24: value = dump_state.crash_info->hfsr; break;
+                        case 25: value = dump_state.crash_info->cfsr; break;
+                        case 26: value = dump_state.crash_info->mmfar; break;
+                        case 27: value = dump_state.crash_info->bfar; break;
+                        case 28: value = dump_state.crash_info->afsr; break;
+                        case 29: value = dump_state.crash_info->nvic_iser0; break;
                     }
                     
                     snprintf(line, sizeof(line), "%s: ", register_names[dump_state.current_region]);
@@ -300,14 +300,14 @@ void tcp_crash_dump_appcall(void) {
                     /* Send NVIC pending interrupts */
                     char line[80];
                     snprintf(line, sizeof(line), "NVIC_ISPR0: 0x%08X (Pending interrupts)", 
-                             dump_state.crash_info.nvic_ispr0);
+                             dump_state.crash_info->nvic_ispr0);
                     prepare_string(line);
                     dump_state.current_region++;
                 } else if (dump_state.current_region == 1) {
                     /* Send NVIC active interrupts */
                     char line[80];
                     snprintf(line, sizeof(line), "NVIC_IABR0: 0x%08X (Active interrupts)", 
-                             dump_state.crash_info.nvic_iabr0);
+                             dump_state.crash_info->nvic_iabr0);
                     prepare_string(line);
                     dump_state.current_region++;
                 } else {
