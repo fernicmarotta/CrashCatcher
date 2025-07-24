@@ -21,12 +21,12 @@ include(cmake/${CMAKE_C_COMPILER_ID}/src.c.cmake)
 # Include uIP sources
 include(cmake/uip.cmake)
 
-# CrashCatcher sources
-set(CC_SRC_CRASHCATCHER
-    ${CMAKE_CURRENT_SOURCE_DIR}/CrashCatcher/Core/src/CrashCatcher.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/CrashCatcher/Core/src/CrashCatcher_armv7m.S
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/CrashCatcher_hooks.c
-)
+# CrashCatcher sources - REMOVED, not needed in bootloader
+# set(CC_SRC_CRASHCATCHER
+#     ${CMAKE_CURRENT_SOURCE_DIR}/CrashCatcher/Core/src/CrashCatcher.c
+#     ${CMAKE_CURRENT_SOURCE_DIR}/CrashCatcher/Core/src/CrashCatcher_armv7m.S
+#     ${CMAKE_CURRENT_SOURCE_DIR}/src/CrashCatcher_hooks.c
+# )
 
 # Ethernet HAL configuration from nube_bootloader
 set(CC_SRC_ETH_HAL
@@ -39,8 +39,9 @@ set(CC_SRC_SYSTEM
     ${CMAKE_CURRENT_SOURCE_DIR}/src/system_stm32h7xx.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/main.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/stm32h7xx_it.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/fault_handlers.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/jump_to_app.S
 )
 
-set(CC_SRC_FILES ${CC_SRC_FILES} ${CC_SRC_STM32_FILES} ${CC_SRC_CRASHCATCHER} ${CC_SRC_SYSTEM} ${CC_SRC_ETH_HAL})
+set(CC_SRC_FILES ${CC_SRC_FILES} ${CC_SRC_STM32_FILES} ${CC_SRC_SYSTEM} ${CC_SRC_ETH_HAL})
 
