@@ -284,6 +284,7 @@ end
 # Short aliases
 # ======================================
 alias lc = load_crash
+alias lcb = load_crash_binary
 alias ac = analyze_crash
 alias ds = dump_stack
 alias rt = reset_target
