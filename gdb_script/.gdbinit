@@ -134,8 +134,17 @@ define load_crash_binary
     # Load 17 registers (R0-R12, SP, LR, PC, PSR) = 68 bytes
     # Use a safe scratch area in DTCM to load register data
     set $scratch = 0x20001000
-    restore $arg0 binary $scratch 0x15C 0x1A0
-
+    
+    # Debug: show what we're trying to do
+    echo Attempting to restore registers from file...\n
+    # Syntax: restore filename binary bias start_offset end_offset
+    # We want to load FROM file offset 0x15C TO memory at $scratch
+    restore $arg0 binary ($scratch - 0x15C) 0x15C 0x1A0
+    
+    # Debug: Check if data was loaded
+    echo \nFirst 4 words at scratch location:\n
+    x/4wx $scratch
+    
     # Now set registers from the loaded data
     set $r0  = *(unsigned int*)($scratch + 0x00)
     set $r1  = *(unsigned int*)($scratch + 0x04)
@@ -154,6 +163,11 @@ define load_crash_binary
     set $lr  = *(unsigned int*)($scratch + 0x38)
     set $pc  = *(unsigned int*)($scratch + 0x3C)
     set $xpsr = *(unsigned int*)($scratch + 0x40)
+    
+    # Debug: Show loaded values
+    echo \nLoaded register values:\n
+    printf "R0=0x%08x R1=0x%08x R2=0x%08x\n", $r0, $r1, $r2
+    printf "SP=0x%08x LR=0x%08x PC=0x%08x\n", $sp, $lr, $pc
 
     echo \n=== State restored! ===\n
     printf "PC = 0x%08x  ", $pc
