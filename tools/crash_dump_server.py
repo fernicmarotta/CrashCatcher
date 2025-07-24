@@ -697,10 +697,18 @@ class CrashDumpServer:
             
             # Force GUI update (for IDEs like CLion)
             f.write("# Update IDE view to show crash location\n")
-            f.write("info threads\n")  # List all threads
-            f.write("thread 1\n")  # Select main thread
+            
+            f.write("# Show all threads (OpenOCD RTOS support will handle this)\n")
+            f.write("echo \\n=== All Threads ===\\n\n")
+            f.write("info threads\n\n")  # List all threads
+            
+            f.write("# Show COMPLETE backtrace for ALL threads\n")
+            f.write("echo \\n=== Complete Thread Backtraces ===\\n\n")
+            f.write("thread apply all bt\n\n")  # FULL backtrace for ALL threads
+            
+            f.write("# Select thread that crashed and position there\n")
+            f.write("thread 1\n")  # Select main/crashed thread
             f.write("frame 0\n")  # Select current frame
-            f.write("thread apply all bt 5\n\n")  # Show first 5 frames of all threads
             
             # Analyze fault registers if available
             f.write("# Check fault registers\n")
