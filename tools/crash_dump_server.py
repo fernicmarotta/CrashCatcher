@@ -565,20 +565,20 @@ class CrashDumpServer:
             # The script expects specific offsets for each region
             
             # Calculate total size needed
-            total_size = 0x0d91bc  # End of last region in GDB script
+            total_size = 0x0f91bc  # End of last region (BACKUP_SRAM end)
             
             # Create buffer filled with 0xFF (unprogrammed flash pattern)
             dump_data = bytearray(b'\xFF' * total_size)
             
             # Map our regions to GDB script expectations
             region_mapping = {
-                'DTCM': {'start': 0x20000000, 'file_offset': 0x0001bc, 'size': 0x80000},
-                'AXI_SRAM': {'start': 0x24000000, 'file_offset': 0x0001bc, 'size': 0x80000},
-                'SRAM1': {'start': 0x30000000, 'file_offset': 0x0801bc, 'size': 0x20000},
-                'SRAM2': {'start': 0x30020000, 'file_offset': 0x0a01bc, 'size': 0x20000},
-                'SRAM3': {'start': 0x30040000, 'file_offset': 0x0c01bc, 'size': 0x08000},
-                'SRAM4': {'start': 0x38000000, 'file_offset': 0x0c81bc, 'size': 0x10000},
-                'BACKUP_SRAM': {'start': 0x38800000, 'file_offset': 0x0d81bc, 'size': 0x1000},
+                'DTCM': {'start': 0x20000000, 'file_offset': 0x0001bc, 'size': 0x20000},
+                'AXI_SRAM': {'start': 0x24000000, 'file_offset': 0x0201bc, 'size': 0x80000},
+                'SRAM1': {'start': 0x30000000, 'file_offset': 0x0a01bc, 'size': 0x20000},
+                'SRAM2': {'start': 0x30020000, 'file_offset': 0x0c01bc, 'size': 0x20000},
+                'SRAM3': {'start': 0x30040000, 'file_offset': 0x0e01bc, 'size': 0x08000},
+                'SRAM4': {'start': 0x38000000, 'file_offset': 0x0e81bc, 'size': 0x10000},
+                'BACKUP_SRAM': {'start': 0x38800000, 'file_offset': 0x0f81bc, 'size': 0x1000},
             }
             
             # Fill memory regions
@@ -705,14 +705,15 @@ class CrashDumpServer:
             f.write("# Restore memory regions (may fail if target memory is protected)\n")
             f.write("echo \\n=== Restoring memory regions ===\\n\n")
             
-            # Map regions to offsets as in .gdbinit
+            # Map regions to offsets as in binary dump
             region_mapping = {
-                'AXI_SRAM': {'addr': 0x24000000, 'start': 0x0001bc, 'end': 0x801bc},
-                'SRAM1': {'addr': 0x30000000, 'start': 0x0801bc, 'end': 0xa01bc},
-                'SRAM2': {'addr': 0x30020000, 'start': 0x0a01bc, 'end': 0xc01bc},
-                'SRAM3': {'addr': 0x30040000, 'start': 0x0c01bc, 'end': 0xc81bc},
-                'SRAM4': {'addr': 0x38000000, 'start': 0x0c81bc, 'end': 0xd81bc},
-                'BACKUP_SRAM': {'addr': 0x38800000, 'start': 0x0d81bc, 'end': 0xd91bc},
+                'DTCM': {'addr': 0x20000000, 'start': 0x0001bc, 'end': 0x0201bc},
+                'AXI_SRAM': {'addr': 0x24000000, 'start': 0x0201bc, 'end': 0x0a01bc},
+                'SRAM1': {'addr': 0x30000000, 'start': 0x0a01bc, 'end': 0x0c01bc},
+                'SRAM2': {'addr': 0x30020000, 'start': 0x0c01bc, 'end': 0x0e01bc},
+                'SRAM3': {'addr': 0x30040000, 'start': 0x0e01bc, 'end': 0x0e81bc},
+                'SRAM4': {'addr': 0x38000000, 'start': 0x0e81bc, 'end': 0x0f81bc},
+                'BACKUP_SRAM': {'addr': 0x38800000, 'start': 0x0f81bc, 'end': 0x0f91bc},
             }
             
             for region_name, info in region_mapping.items():
