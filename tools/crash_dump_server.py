@@ -695,6 +695,11 @@ class CrashDumpServer:
             f.write("echo \\n=== Code at crash location ===\\n\n")
             f.write("list *$pc\n\n")
             
+            # Force GUI update (for IDEs like CLion)
+            f.write("# Update IDE view to show crash location\n")
+            f.write("frame 0\n")  # Select current frame
+            f.write("thread apply all bt\n\n")  # Update thread view
+            
             # Analyze fault registers if available
             f.write("# Check fault registers\n")
             f.write("echo \\n=== Fault Status Registers ===\\n\n")
@@ -713,7 +718,14 @@ class CrashDumpServer:
             f.write("end\n")
             f.write("if ($cfsr & 0x00000080)\n")
             f.write("  printf \"- MMFAR valid: 0x%08x\\n\", *(unsigned int*)0xE000ED34\n")
-            f.write("end\n")
+            f.write("end\n\n")
+            
+            # Final commands to position at crash
+            f.write("# Position at crash location\n")
+            f.write("echo \\n=== Positioning at crash location ===\\n\n")
+            f.write("# Continue to PC (this will stop immediately at current PC)\n")
+            f.write("# This forces IDEs to update their view\n")
+            f.write("stepi 0\n")  # Step 0 instructions = refresh view
             
         print(f"GDB script created: {os.path.getsize(filename)} bytes")
 
