@@ -792,7 +792,6 @@ class CrashDumpServer:
             f.write("info threads\n")  # Update thread list
             f.write("info locals\n")   # Update local variables
             f.write("info args\n")     # Update function arguments
-            f.write("thread 1\n")      # Ensure we're on main thread
             
             f.write("# This forces IDEs to update their view\n")
             f.write("stepi 0\n")  # Step 0 instructions = refresh view
