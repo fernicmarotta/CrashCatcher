@@ -567,22 +567,50 @@ class CrashDumpServer:
                         if file_pos + len(data) <= len(dump_data):
                             dump_data[file_pos:file_pos + len(data)] = data
             
-            # Write registers at offset 0x114 (as expected by GDB script)
-            # But GDB script expects registers at 0x15C
-            # So we need to write directly at 0x15C, not wrapped in prstatus
-            reg_offset = 0x15C
+            # Write complete prstatus structure at offset 0x114
+            reg_offset = 0x114
             
-            # Write registers directly at expected offset
+            # Create complete prstatus structure (148 bytes)
+            prstatus = bytearray(148)
+            
+            # Fill prstatus header
+            # pr_info (12 bytes) - signal info
+            struct.pack_into('<i', prstatus, 0, 11)     # SIGSEGV
+            struct.pack_into('<i', prstatus, 4, 0)      # si_code
+            struct.pack_into('<i', prstatus, 8, 0)      # si_errno
+            
+            # pr_cursig (2 bytes) + padding
+            struct.pack_into('<h', prstatus, 12, 11)    # SIGSEGV
+            struct.pack_into('<h', prstatus, 14, 0)     # padding
+            
+            # pr_sigpend, pr_sighold (8 bytes)
+            struct.pack_into('<II', prstatus, 16, 0, 0)
+            
+            # pr_pid, pr_ppid, pr_pgrp, pr_sid (16 bytes)
+            struct.pack_into('<IIII', prstatus, 24, 1, 0, 1, 1)
+            
+            # pr_utime, pr_stime, pr_cutime, pr_cstime (32 bytes) - all zero
+            # Already zero from bytearray initialization
+            
+            # pr_reg - registers start at offset 72
+            reg_pos = 72
             for i in range(13):
                 reg_name = f'R{i}'
                 value = self.registers.get(reg_name, 0) & 0xFFFFFFFF
-                struct.pack_into('<I', dump_data, reg_offset + i*4, value)
+                struct.pack_into('<I', prstatus, reg_pos + i*4, value)
             
-            # Special registers - ensure 32-bit values
-            struct.pack_into('<I', dump_data, reg_offset + 13*4, self.registers.get('SP', 0) & 0xFFFFFFFF)
-            struct.pack_into('<I', dump_data, reg_offset + 14*4, self.registers.get('LR', 0) & 0xFFFFFFFF)
-            struct.pack_into('<I', dump_data, reg_offset + 15*4, self.registers.get('PC', 0) & 0xFFFFFFFF)
-            struct.pack_into('<I', dump_data, reg_offset + 16*4, self.registers.get('PSR', 0) & 0xFFFFFFFF)
+            # Special registers
+            struct.pack_into('<I', prstatus, reg_pos + 13*4, self.registers.get('SP', 0) & 0xFFFFFFFF)
+            struct.pack_into('<I', prstatus, reg_pos + 14*4, self.registers.get('LR', 0) & 0xFFFFFFFF)
+            struct.pack_into('<I', prstatus, reg_pos + 15*4, self.registers.get('PC', 0) & 0xFFFFFFFF)
+            struct.pack_into('<I', prstatus, reg_pos + 16*4, self.registers.get('PSR', 0) & 0xFFFFFFFF)
+            struct.pack_into('<I', prstatus, reg_pos + 17*4, 0)  # orig_r0
+            
+            # pr_fpvalid (4 bytes)
+            struct.pack_into('<I', prstatus, 144, 0)
+            
+            # Write prstatus at expected offset
+            dump_data[reg_offset:reg_offset + len(prstatus)] = prstatus
             
             # Write to file
             f.write(dump_data)
