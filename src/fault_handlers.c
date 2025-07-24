@@ -8,18 +8,19 @@ static void trigger_software_reset(void) {
     /* Disable all interrupts */
     __disable_irq();
     
-    /* Clean D-Cache to ensure all modified data is written back to RAM */
-    SCB_CleanDCache();
+    /* Only clean/invalidate caches if they are enabled */
+    if (SCB->CCR & SCB_CCR_DC_Msk) {
+        /* D-Cache is enabled, clean and invalidate it */
+        SCB_CleanDCache();
+        SCB_InvalidateDCache();
+        SCB_DisableDCache();
+    }
     
-    /* Invalidate D-Cache to ensure no stale data remains */
-    SCB_InvalidateDCache();
-    
-    /* Invalidate I-Cache as well */
-    SCB_InvalidateICache();
-    
-    /* Disable both caches before reset to ensure bootloader starts clean */
-    SCB_DisableDCache();
-    SCB_DisableICache();
+    if (SCB->CCR & SCB_CCR_IC_Msk) {
+        /* I-Cache is enabled, invalidate it */
+        SCB_InvalidateICache();
+        SCB_DisableICache();
+    }
     
     /* Final barrier to ensure all operations complete */
     __DSB();

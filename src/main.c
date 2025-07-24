@@ -138,7 +138,12 @@ int main(void) {
     const uint32_t retry_delay_ms = 2000;    /* 2 seconds between retries */
     const uint32_t arp_delay_ms = 100;       /* 100ms ARP propagation */
     int network_initialized = 0;
-    
+    /* Disable I-Cache and D-Cache */
+    /* NOTE: Commenting out temporarily to debug hang issue */
+    SCB_DisableICache();
+
+    /* Enable D-Cache */
+    SCB_DisableDCache();
     /* Initialize HAL */
     HAL_Init();
     

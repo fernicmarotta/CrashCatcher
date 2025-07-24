@@ -12,8 +12,7 @@
 
 jump_to_application_asm:
     /* r0 contains the application address */
-    /* Clear PRIMASK to ensure interrupts can be enabled by app */
-    cpsie i
+    /* Do NOT enable interrupts - let the app decide when to enable them */
     
     /* Load new stack pointer */
     ldr sp, [r0]
