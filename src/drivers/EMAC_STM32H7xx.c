@@ -166,6 +166,9 @@ Configuration tab
 #define EMAC_TIME_STAMP         0
 #endif
 
+/* Polling timeout for Ethernet operations */
+#define EMAC_POLLING_TIMEOUT_MS  10U
+
 #include "EMAC_STM32H7xx.h"
 
 /* Driver version */
@@ -551,7 +554,8 @@ static int32_t SendFrame (const uint8_t *frame, uint32_t len, uint32_t flags) {
   if ((SCB->CCR & SCB_CCR_DC_Msk) != 0U) {
     SCB_CleanInvalidateDCache();
   }
-  HAL_ETH_Transmit_IT (&heth, &TX_Config);
+  /* Use polling mode instead of interrupt mode */
+  HAL_ETH_Transmit(&heth, &TX_Config, EMAC_POLLING_TIMEOUT_MS);
 
   Emac.tx_buf.len = 0;
   return ARM_DRIVER_OK;
@@ -761,10 +765,10 @@ static int32_t Control (uint32_t control, uint32_t arg) {
     case ARM_ETH_MAC_CONTROL_RX:
       if (arg != 0U) {
         /* Enable MAC receiver */
-        HAL_ETH_Start_IT (Emac.h);
+        HAL_ETH_Start(Emac.h);
       } else {
         /* Disable MAC receiver */
-        HAL_ETH_Stop_IT (Emac.h);
+        HAL_ETH_Stop(Emac.h);
       }
       return ARM_DRIVER_OK;
 

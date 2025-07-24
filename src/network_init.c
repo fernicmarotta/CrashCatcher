@@ -2,8 +2,9 @@
 #include "uip.h"
 #include "uip_arp.h"
 #include "netdev.h"
-#include "tcp_crash_dump_uip.h"
+#include "tcp_crash_dump.h"
 #include "timer.h"
+#include "Driver_ETH.h"
 #include <string.h>
 
 /* Network configuration */
@@ -128,6 +129,9 @@ int network_init(void) {
     /* Initialize uIP */
     uip_init();
     
+    /* Initialize ARP table */
+    uip_arp_init();
+    
     /* Get MAC address from driver and set it in uIP stack */
     netdev_get_mac_address(&mac_addr);
     uip_setethaddr(mac_addr);
@@ -151,8 +155,12 @@ int network_init(void) {
     /* Initialize TCP crash dump module */
     tcp_crash_dump_init();
     
-    /* Send gratuitous ARP announcement */
-    /* Build ARP packet directly in uip_buf */
+    return 0;
+}
+
+/* Send gratuitous ARP announcement */
+void network_send_gratuitous_arp(void) {
+    /* ARP header structure */
     struct arp_hdr {
         struct uip_eth_hdr ethhdr;
         u16_t hwtype;
@@ -168,9 +176,22 @@ int network_init(void) {
     
     struct arp_hdr *arp = (struct arp_hdr *)uip_buf;
     
+    /* Get our MAC from driver */
+    struct uip_eth_addr mac_addr;
+    ARM_ETH_MAC_ADDR arm_mac_addr;
+    netdev_get_mac_address(&arm_mac_addr);
+    
+    /* Convert ARM MAC format to uIP format */
+    mac_addr.addr[0] = arm_mac_addr.b[0];
+    mac_addr.addr[1] = arm_mac_addr.b[1];
+    mac_addr.addr[2] = arm_mac_addr.b[2];
+    mac_addr.addr[3] = arm_mac_addr.b[3];
+    mac_addr.addr[4] = arm_mac_addr.b[4];
+    mac_addr.addr[5] = arm_mac_addr.b[5];
+    
     /* Fill Ethernet header - broadcast */
     memset(arp->ethhdr.dest.addr, 0xff, 6);  /* Broadcast MAC */
-    memcpy(arp->ethhdr.src.addr, mac_addr.addr, 6);  /* Use MAC from driver */
+    memcpy(arp->ethhdr.src.addr, mac_addr.addr, 6);
     arp->ethhdr.type = HTONS(UIP_ETHTYPE_ARP);
     
     /* Fill ARP header */
@@ -180,7 +201,7 @@ int network_init(void) {
     arp->protolen = 4;
     arp->opcode = HTONS(1);  /* ARP Request */
     
-    /* Sender hardware address (our MAC from driver) */
+    /* Sender hardware address (our MAC) */
     memcpy(arp->shwaddr.addr, mac_addr.addr, 6);
     
     /* Sender IP address (our IP) */
@@ -198,8 +219,6 @@ int network_init(void) {
     /* Send the gratuitous ARP */
     uip_len = sizeof(struct arp_hdr);
     netdev_send();
-    
-    return 0;
 }
 
 /* Process network packets - call this in main loop */

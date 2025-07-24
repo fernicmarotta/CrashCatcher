@@ -1,7 +1,8 @@
 #include "stm32h7xx_hal.h"
 #include "crash_info.h"
 #include "network_init.h"
-#include "tcp_crash_dump_uip.h"
+#include "tcp_crash_dump.h"
+#include "timer.h"
 #include <string.h>
 
 /* Application start address */
@@ -114,10 +115,29 @@ static void jump_to_application(void) {
     jump_to_application_asm(app_address);
 }
 
+/* State machine states */
+typedef enum {
+    STATE_INIT,
+    STATE_ARP_ANNOUNCE,
+    STATE_ARP_WAIT,
+    STATE_TCP_START,
+    STATE_TCP_SENDING,
+    STATE_TCP_RETRY_WAIT,
+    STATE_DONE
+} bootloader_state_t;
+
 int main(void) {
     crash_info_t *crash_info = (crash_info_t *)BACKUP_SRAM_BASE;
-    uint32_t timeout = 30000; /* 30 second timeout */
-    uint32_t start_time;
+    bootloader_state_t state = STATE_INIT;
+    struct timer dump_timer;
+    struct timer retry_timer;
+    struct timer arp_timer;
+    int retry_count = 0;
+    const int max_retries = 3;
+    const uint32_t dump_timeout_ms = 30000;  /* 30 seconds per attempt */
+    const uint32_t retry_delay_ms = 2000;    /* 2 seconds between retries */
+    const uint32_t arp_delay_ms = 100;       /* 100ms ARP propagation */
+    int network_initialized = 0;
     
     /* Initialize HAL */
     HAL_Init();
@@ -125,34 +145,125 @@ int main(void) {
     /* Configure system clock */
     SystemClock_Config();
     
-    /* Check if we have a valid crash dump */
-    if (crash_info->magic == CRASH_MAGIC_VALID) {
-        /* Initialize network */
-        if (network_init() == 0) {
-            /* Start crash dump transmission */
-            if (tcp_crash_dump_start(crash_info) == 0) {
-                /* Wait for dump to complete or timeout */
-                start_time = HAL_GetTick();
+    /* Main polling loop */
+    while (1) {
+        switch (state) {
+            case STATE_INIT:
+                /* Check if we have a valid crash dump */
+                if (crash_info->magic == CRASH_MAGIC_VALID) {
+                    /* Initialize network */
+                    if (network_init() == 0) {
+                        network_initialized = 1;
+                        state = STATE_ARP_ANNOUNCE;
+                    } else {
+                        /* Network init failed, jump to app */
+                        state = STATE_DONE;
+                    }
+                } else {
+                    /* No crash dump, jump to app */
+                    state = STATE_DONE;
+                }
+                break;
                 
-                while (!tcp_crash_dump_is_complete()) {
-                    /* Process network packets */
+            case STATE_ARP_ANNOUNCE:
+                /* Send gratuitous ARP */
+                network_send_gratuitous_arp();
+                
+                /* Start ARP wait timer */
+                timer_set(&arp_timer, arp_delay_ms);
+                state = STATE_ARP_WAIT;
+                break;
+                
+            case STATE_ARP_WAIT:
+                /* Process network while waiting */
+                if (network_initialized) {
                     network_process();
-                    
-                    /* Check timeout */
-                    if ((HAL_GetTick() - start_time) > timeout) {
-                        break;
+                }
+                
+                /* Check if ARP wait time expired */
+                if (timer_expired(&arp_timer)) {
+                    state = STATE_TCP_START;
+                }
+                break;
+                
+            case STATE_TCP_START:
+                /* Try to start TCP connection */
+                if (tcp_crash_dump_start(crash_info) == 0) {
+                    /* Started successfully, set timeout */
+                    timer_set(&dump_timer, dump_timeout_ms);
+                    state = STATE_TCP_SENDING;
+                } else {
+                    /* Failed to start */
+                    retry_count++;
+                    if (retry_count < max_retries) {
+                        timer_set(&retry_timer, retry_delay_ms);
+                        state = STATE_TCP_RETRY_WAIT;
+                    } else {
+                        state = STATE_DONE;
                     }
                 }
-            }
+                break;
+                
+            case STATE_TCP_SENDING:
+                /* Process network and TCP */
+                if (network_initialized) {
+                    network_process();
+                    tcp_crash_dump_poll();
+                }
+                
+                /* Check completion */
+                if (tcp_crash_dump_is_complete()) {
+                    if (!tcp_crash_dump_has_error()) {
+                        /* Success */
+                        state = STATE_DONE;
+                    } else {
+                        /* Error occurred */
+                        retry_count++;
+                        if (retry_count < max_retries) {
+                            timer_set(&retry_timer, retry_delay_ms);
+                            state = STATE_TCP_RETRY_WAIT;
+                        } else {
+                            state = STATE_DONE;
+                        }
+                    }
+                } else if (timer_expired(&dump_timer)) {
+                    /* Timeout */
+                    retry_count++;
+                    if (retry_count < max_retries) {
+                        timer_set(&retry_timer, retry_delay_ms);
+                        state = STATE_TCP_RETRY_WAIT;
+                    } else {
+                        state = STATE_DONE;
+                    }
+                }
+                break;
+                
+            case STATE_TCP_RETRY_WAIT:
+                /* Process network while waiting */
+                if (network_initialized) {
+                    network_process();
+                }
+                
+                /* Check if retry delay expired */
+                if (timer_expired(&retry_timer)) {
+                    /* Reinitialize for retry */
+                    tcp_crash_dump_init();
+                    state = STATE_TCP_START;
+                }
+                break;
+                
+            case STATE_DONE:
+                /* Clear crash info */
+                if (crash_info->magic == CRASH_MAGIC_VALID) {
+                    crash_info->magic = 0;
+                }
+                
+                /* Jump to application */
+                jump_to_application();
+                
+                /* Should never reach here */
+                while (1);
+                break;
         }
-        
-        /* Clear crash info */
-        crash_info->magic = 0;
     }
-    
-    /* Jump to application */
-    jump_to_application();
-    
-    /* Should never reach here */
-    while (1);
 }

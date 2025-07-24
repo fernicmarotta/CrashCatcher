@@ -158,10 +158,8 @@ st-flash write CORTEX_COREDUMP.bin 0x08020000
 ## Network Configuration
 
 ### Device Settings
-- Bootloader IP: 192.168.1.200
-- Application IP: 192.168.1.100
-- Dump Server: 192.168.1.10:9999
-- PHY: DP83848C at address 0x01
+- Bootloader IP(nosotrols): 192.168.204.16
+- Dump Server: 192.168.204.134:9999
 
 ### TCP Dump Protocol
 1. Connection to server on port 9999
