@@ -130,11 +130,11 @@ define load_crash_binary
 
     # Load registers
     echo \n=== Restoring registers ===\n
-    # prstatus structure is at 0x114, registers at offset 72 within it
-    # So registers are at 0x114 + 72 = 0x186
+    # The actual register data starts at 0x15C in the dump
+    # Load 17 registers (R0-R12, SP, LR, PC, PSR) = 68 bytes
     # Use a safe scratch area in DTCM to load register data
     set $scratch = 0x20001000
-    restore $arg0 binary $scratch 0x186 0x1CA
+    restore $arg0 binary $scratch 0x15C 0x1A0
 
     # Now set registers from the loaded data
     set $r0  = *(unsigned int*)($scratch + 0x00)
