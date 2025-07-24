@@ -655,7 +655,16 @@ class CrashDumpServer:
             f.write(f"set $xpsr = 0x{self.registers.get('PSR', 0) & 0xFFFFFFFF:08X}\n\n")
             
             # Memory regions (optional - may fail if target memory is protected)
-            f.write("# Restore memory regions (may fail if memory is protected)\n")
+            f.write("# Enable all STM32H7 power domains first\n")
+            f.write("echo Enabling STM32H7 power domains...\\n\n")
+            f.write("# Enable SRAM1/2/3 clocks (RCC AHB2ENR)\n")
+            f.write("set *(unsigned int*)0x580244DC = *(unsigned int*)0x580244DC | 0xE0000000\n")
+            f.write("# Enable SRAM4 and Backup SRAM clocks (RCC AHB4ENR)\n")
+            f.write("set *(unsigned int*)0x580244E0 = *(unsigned int*)0x580244E0 | 0x10000000\n")
+            f.write("# Enable backup domain access (PWR CR1)\n")
+            f.write("set *(unsigned int*)0x58024800 = *(unsigned int*)0x58024800 | 0x00000100\n\n")
+            
+            f.write("# Restore memory regions (may fail if target memory is protected)\n")
             f.write("echo \\n=== Restoring memory regions ===\\n\n")
             
             # Map regions to offsets as in .gdbinit
