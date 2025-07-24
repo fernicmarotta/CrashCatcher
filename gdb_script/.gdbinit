@@ -132,7 +132,7 @@ define load_crash_binary
     echo \n=== Restoring registers ===\n
     # Registers are at offset 0x114 + 72 (prstatus offset) = 0x15C
     # Use a safe scratch area in DTCM to load register data
-    set $scratch = 0x20000000
+    set $scratch = 0x20001000
     restore $arg0 binary $scratch 0x15C 0x19C
 
     # Now set registers from the loaded data

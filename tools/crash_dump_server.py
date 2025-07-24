@@ -568,29 +568,21 @@ class CrashDumpServer:
                             dump_data[file_pos:file_pos + len(data)] = data
             
             # Write registers at offset 0x114 (as expected by GDB script)
-            # Format: prstatus structure with registers at offset 72
-            reg_offset = 0x114
+            # But GDB script expects registers at 0x15C
+            # So we need to write directly at 0x15C, not wrapped in prstatus
+            reg_offset = 0x15C
             
-            # Create minimal prstatus structure
-            prstatus = bytearray(148)  # Size from GDB script (0x1a8 - 0x114)
-            
-            # Skip to register offset (72 bytes into prstatus)
-            reg_pos = 72
-            
-            # Write registers in order expected by GDB
+            # Write registers directly at expected offset
             for i in range(13):
                 reg_name = f'R{i}'
                 value = self.registers.get(reg_name, 0) & 0xFFFFFFFF
-                struct.pack_into('<I', prstatus, reg_pos + i*4, value)
+                struct.pack_into('<I', dump_data, reg_offset + i*4, value)
             
             # Special registers - ensure 32-bit values
-            struct.pack_into('<I', prstatus, reg_pos + 13*4, self.registers.get('SP', 0) & 0xFFFFFFFF)
-            struct.pack_into('<I', prstatus, reg_pos + 14*4, self.registers.get('LR', 0) & 0xFFFFFFFF)
-            struct.pack_into('<I', prstatus, reg_pos + 15*4, self.registers.get('PC', 0) & 0xFFFFFFFF)
-            struct.pack_into('<I', prstatus, reg_pos + 16*4, self.registers.get('PSR', 0) & 0xFFFFFFFF)
-            
-            # Write prstatus at expected offset
-            dump_data[reg_offset:reg_offset + len(prstatus)] = prstatus
+            struct.pack_into('<I', dump_data, reg_offset + 13*4, self.registers.get('SP', 0) & 0xFFFFFFFF)
+            struct.pack_into('<I', dump_data, reg_offset + 14*4, self.registers.get('LR', 0) & 0xFFFFFFFF)
+            struct.pack_into('<I', dump_data, reg_offset + 15*4, self.registers.get('PC', 0) & 0xFFFFFFFF)
+            struct.pack_into('<I', dump_data, reg_offset + 16*4, self.registers.get('PSR', 0) & 0xFFFFFFFF)
             
             # Write to file
             f.write(dump_data)
