@@ -60,9 +60,20 @@ class CrashDumpServer:
                 return None, None
                 
             reg_name = parts[0].strip()
-            value = int(parts[1].strip(), 16)
+            value_str = parts[1].strip()
+            
+            # Clean up the value string - remove spaces and control characters
+            # Could be "12345678" or "12 34 56 78" or have control chars
+            value_str = ''.join(c for c in value_str if c.isalnum())
+            
+            # Parse hex value
+            value = int(value_str, 16)
+            
+            # Ensure value fits in 32 bits (handle overflow)
+            value = value & 0xFFFFFFFF
+            
             return reg_name, value
-        except:
+        except Exception as e:
             return None, None
     
     def receive_dump(self):
@@ -122,7 +133,6 @@ class CrashDumpServer:
                                 reg_name, value = self.parse_register(line)
                                 if reg_name and value is not None:
                                     self.registers[reg_name] = value
-                                    print(f"Register {reg_name}: 0x{value:08X}")
                             
                             # Parse memory regions
                             if in_memory_dump:
@@ -409,14 +419,21 @@ class CrashDumpServer:
         # pr_reg - ARM register set (18 registers * 4 bytes = 72 bytes)
         # Order: r0-r15, cpsr, orig_r0
         for i in range(13):
-            value = self.registers.get(f'R{i}', 0)
+            reg_name = f'R{i}'
+            value = self.registers.get(reg_name, 0)
             prstatus.extend(struct.pack('<I', value))
         
-        prstatus.extend(struct.pack('<I', self.registers.get('SP', 0)))   # r13
-        prstatus.extend(struct.pack('<I', self.registers.get('LR', 0)))   # r14
-        prstatus.extend(struct.pack('<I', self.registers.get('PC', 0)))   # r15
-        prstatus.extend(struct.pack('<I', self.registers.get('PSR', 0)))  # cpsr
-        prstatus.extend(struct.pack('<I', 0))                             # orig_r0
+        # Special registers - ensure they fit in 32 bits
+        sp_val = self.registers.get('SP', 0) & 0xFFFFFFFF
+        lr_val = self.registers.get('LR', 0) & 0xFFFFFFFF
+        pc_val = self.registers.get('PC', 0) & 0xFFFFFFFF
+        psr_val = self.registers.get('PSR', 0) & 0xFFFFFFFF
+        
+        prstatus.extend(struct.pack('<I', sp_val))   # r13
+        prstatus.extend(struct.pack('<I', lr_val))   # r14
+        prstatus.extend(struct.pack('<I', pc_val))   # r15
+        prstatus.extend(struct.pack('<I', psr_val))  # cpsr
+        prstatus.extend(struct.pack('<I', 0))         # orig_r0
         
         # pr_fpvalid (4 bytes)
         prstatus.extend(struct.pack('<I', 0))

@@ -272,6 +272,7 @@ void tcp_crash_dump_appcall(void) {
                     snprintf(line, sizeof(line), "%s: ", register_names[dump_state.current_region]);
                     size_t len = strlen(line);
                     format_hex_word(&line[len], value);
+                    line[len + 8] = '\0';  /* Null terminate after 8 hex chars */
                     prepare_string(line);
                     dump_state.current_region++;
                 } else {
