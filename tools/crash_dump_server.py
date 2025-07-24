@@ -170,7 +170,7 @@ class CrashDumpServer:
                     print(f"\nFor GDB analysis of ELF:")
                     print(f"1. Copy your application ELF to '{elf_filename}'")
                     print(f"2. Run: arm-none-eabi-gdb {elf_filename}")
-                    print(f"3. In GDB: set architecture arm")
+                    print(f"3. In GDB: set architecture armv7e-m")
                     print(f"4. In GDB: core {core_filename}")
                     print(f"\nFor loading binary dump into live target:")
                     print(f"1. Connect to target with GDB")
