@@ -685,12 +685,34 @@ class CrashDumpServer:
             f.write("echo \\n=== CPU Registers ===\\n\n")
             f.write("info registers\n\n")
             
-            # Analyze crash
-            f.write("# Analyze the crash\n")
-            f.write("if (analyze_crash)\n")
-            f.write("  analyze_crash\n")
-            f.write("else\n")
-            f.write("  echo \\nRun 'analyze_crash' to see crash analysis\\n\n")
+            # Show backtrace
+            f.write("# Show backtrace\n")
+            f.write("echo \\n=== Backtrace ===\\n\n")
+            f.write("bt\n\n")
+            
+            # Show code around crash
+            f.write("# Show code around crash location\n")
+            f.write("echo \\n=== Code at crash location ===\\n\n")
+            f.write("list *$pc\n\n")
+            
+            # Analyze fault registers if available
+            f.write("# Check fault registers\n")
+            f.write("echo \\n=== Fault Status Registers ===\\n\n")
+            f.write("set $cfsr = *(unsigned int*)0xE000ED28\n")
+            f.write("set $hfsr = *(unsigned int*)0xE000ED2C\n")
+            f.write("printf \"CFSR = 0x%08x\\n\", $cfsr\n")
+            f.write("printf \"HFSR = 0x%08x\\n\", $hfsr\n\n")
+            
+            # Decode CFSR bits
+            f.write("# Decode fault cause\n")
+            f.write("if ($hfsr & 0x40000000)\n")
+            f.write("  echo - FORCED: Hard fault escalated from another fault\\n\n")
+            f.write("end\n")
+            f.write("if ($cfsr & 0x00008000)\n")
+            f.write("  printf \"- BFAR valid: 0x%08x\\n\", *(unsigned int*)0xE000ED38\n")
+            f.write("end\n")
+            f.write("if ($cfsr & 0x00000080)\n")
+            f.write("  printf \"- MMFAR valid: 0x%08x\\n\", *(unsigned int*)0xE000ED34\n")
             f.write("end\n")
             
         print(f"GDB script created: {os.path.getsize(filename)} bytes")
