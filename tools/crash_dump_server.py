@@ -760,8 +760,8 @@ class CrashDumpServer:
             f.write("echo \\n=== Complete Thread Backtraces ===\\n\n")
             f.write("thread apply all bt\n\n")  # FULL backtrace for ALL threads
             
-            f.write("# Select thread that crashed and position there\n")
-            f.write("thread 1\n")  # Select main/crashed thread
+            # Don't select a specific thread - use the current thread
+            # GDB will already be on the crashed thread after loading PC
             
             # Analyze fault registers if available
             f.write("\n# Check fault registers\n")
