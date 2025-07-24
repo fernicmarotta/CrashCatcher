@@ -762,10 +762,9 @@ class CrashDumpServer:
             
             f.write("# Select thread that crashed and position there\n")
             f.write("thread 1\n")  # Select main/crashed thread
-            # Don't use frame 0 as it may fail without debug info
             
             # Analyze fault registers if available
-            f.write("# Check fault registers\n")
+            f.write("\n# Check fault registers\n")
             f.write("echo \\n=== Fault Status Registers ===\\n\n")
             f.write("set $cfsr = *(unsigned int*)0xE000ED28\n")
             f.write("set $hfsr = *(unsigned int*)0xE000ED2C\n")
