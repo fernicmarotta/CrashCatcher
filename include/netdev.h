@@ -47,8 +47,16 @@
 #ifndef __NETDEV_H__
 #define __NETDEV_H__
 
+#include <stdint.h>
+
+/* Forward declaration for uIP types */
+struct uip_eth_addr;
+
 int          netdev_init(void);
+void         netdev_set_mac_address(struct uip_eth_addr *addr);
+void         netdev_get_mac_address(struct uip_eth_addr *addr);
 void         netdev_init_mac(void);
+int          netdev_wait_for_link_up(uint32_t timeout_ms);
 void         netdev_get_mac(unsigned char * mac_addr);
 unsigned int netdev_read(void);
 void         netdev_send(void);

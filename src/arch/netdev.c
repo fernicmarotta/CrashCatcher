@@ -71,6 +71,12 @@ static ARM_ETH_MAC_CAPABILITIES capabilities;
 /*---------------------------------------------------------------------------*/
 
 /**
+ * \brief   Waits for PHY link to be up
+ * \return  0 if link is up, -1 if timeout
+ */
+int netdev_wait_for_link_up(uint32_t timeout_ms);
+
+/**
  * \brief   Dummy function needed by the MAC initialization as IRQ are not enabled. Therefore, this
  * function will never be called
  */
@@ -98,6 +104,37 @@ int netdev_init (void)
 }
 
 /**
+ * \brief   Sets the MAC address for the ethernet
+ */
+void netdev_set_mac_address(struct uip_eth_addr *addr)
+{
+    /* Copy MAC address to driver structure */
+    own_mac_address.b[0] = addr->addr[0];
+    own_mac_address.b[1] = addr->addr[1];
+    own_mac_address.b[2] = addr->addr[2];
+    own_mac_address.b[3] = addr->addr[3];
+    own_mac_address.b[4] = addr->addr[4];
+    own_mac_address.b[5] = addr->addr[5];
+}
+
+/**
+ * \brief   Gets the MAC address from the ethernet driver
+ */
+void netdev_get_mac_address(struct uip_eth_addr *addr)
+{
+    /* Get MAC address from driver */
+    mac->GetMacAddress(&own_mac_address);
+    
+    /* Copy to uIP structure */
+    addr->addr[0] = own_mac_address.b[0];
+    addr->addr[1] = own_mac_address.b[1];
+    addr->addr[2] = own_mac_address.b[2];
+    addr->addr[3] = own_mac_address.b[3];
+    addr->addr[4] = own_mac_address.b[4];
+    addr->addr[5] = own_mac_address.b[5];
+}
+
+/**
  * \brief   Initializes the MAC address for the ethernet
  */
 void netdev_init_mac (void)
@@ -105,22 +142,8 @@ void netdev_init_mac (void)
     /* Initialize Media Access Controller */
     capabilities = mac->GetCapabilities ();
 
-    if (capabilities.mac_address == 0)
-    {
-        /* populate own_mac_address with the address to use */
-        own_mac_address.b[0] = 0x00;
-        own_mac_address.b[1] = 0x0A;
-        own_mac_address.b[2] = 0x35;
-        own_mac_address.b[3] = 0x00;
-        own_mac_address.b[4] = 0x01;
-        own_mac_address.b[5] = 0x02;
-
-        mac->SetMacAddress (&own_mac_address);
-    }
-    else
-    {
-        mac->GetMacAddress (&own_mac_address);
-    }
+    /* Always set the MAC address we configured */
+    mac->SetMacAddress (&own_mac_address);
 
     /* Initialize Physical Media Interface */
     if (phy->Initialize (mac->PHY_Read, mac->PHY_Write) == ARM_DRIVER_OK)
@@ -200,6 +223,37 @@ void ethernet_mac_notify (uint32_t event)
     (void)event;
 }
 
+
+/**
+ * \brief   Waits for PHY link to be up
+ * \param   timeout_ms Timeout in milliseconds
+ * \return  0 if link is up, -1 if timeout
+ */
+int netdev_wait_for_link_up(uint32_t timeout_ms)
+{
+    uint32_t start_tick = HAL_GetTick();
+    ARM_ETH_LINK_STATE link_state;
+    
+    /* Check if PHY is initialized */
+    if (phy == NULL) {
+        return -1;
+    }
+    
+    /* Wait for link to be up */
+    do {
+        link_state = phy->GetLinkState();
+        
+        if (link_state == ARM_ETH_LINK_UP) {
+            return 0;  /* Link is up */
+        }
+        
+        /* Small delay to avoid busy waiting */
+        HAL_Delay(10);
+        
+    } while ((HAL_GetTick() - start_tick) < timeout_ms);
+    
+    return -1;  /* Timeout */
+}
 
 /**
  * \}

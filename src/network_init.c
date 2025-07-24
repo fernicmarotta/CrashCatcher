@@ -9,20 +9,20 @@
 /* Network configuration */
 #define BOOTLOADER_IP_ADDR0 192
 #define BOOTLOADER_IP_ADDR1 168
-#define BOOTLOADER_IP_ADDR2 1
-#define BOOTLOADER_IP_ADDR3 200
+#define BOOTLOADER_IP_ADDR2 204
+#define BOOTLOADER_IP_ADDR3 16
 
 #define BOOTLOADER_NETMASK0 255
 #define BOOTLOADER_NETMASK1 255
 #define BOOTLOADER_NETMASK2 255
 #define BOOTLOADER_NETMASK3 0
 
-#define BOOTLOADER_MAC_ADDR0 0x00
-#define BOOTLOADER_MAC_ADDR1 0x0A
-#define BOOTLOADER_MAC_ADDR2 0x35
-#define BOOTLOADER_MAC_ADDR3 0x00
-#define BOOTLOADER_MAC_ADDR4 0x01
-#define BOOTLOADER_MAC_ADDR5 0x02
+#define BOOTLOADER_MAC_ADDR0 0x8c
+#define BOOTLOADER_MAC_ADDR1 0x1f
+#define BOOTLOADER_MAC_ADDR2 0x64
+#define BOOTLOADER_MAC_ADDR3 0x36
+#define BOOTLOADER_MAC_ADDR4 0x28
+#define BOOTLOADER_MAC_ADDR5 0x9
 
 /* Timer for periodic uIP processing */
 #define UIP_PERIODIC_TIMER_MS 500
@@ -106,12 +106,6 @@ int network_init(void) {
         return -1;
     }
     
-    /* Initialize MAC address and PHY */
-    netdev_init_mac();
-    
-    /* Initialize uIP */
-    uip_init();
-    
     /* Set MAC address */
     mac_addr.addr[0] = BOOTLOADER_MAC_ADDR0;
     mac_addr.addr[1] = BOOTLOADER_MAC_ADDR1;
@@ -119,6 +113,23 @@ int network_init(void) {
     mac_addr.addr[3] = BOOTLOADER_MAC_ADDR3;
     mac_addr.addr[4] = BOOTLOADER_MAC_ADDR4;
     mac_addr.addr[5] = BOOTLOADER_MAC_ADDR5;
+    
+    /* Set MAC address in the driver */
+    netdev_set_mac_address(&mac_addr);
+    
+    /* Initialize MAC address and PHY */
+    netdev_init_mac();
+    
+    /* Wait for PHY link to be up (5 second timeout) */
+    if (netdev_wait_for_link_up(5000) != 0) {
+        return -1;  /* No link */
+    }
+    
+    /* Initialize uIP */
+    uip_init();
+    
+    /* Get MAC address from driver and set it in uIP stack */
+    netdev_get_mac_address(&mac_addr);
     uip_setethaddr(mac_addr);
     
     /* Set IP address */
@@ -159,7 +170,7 @@ int network_init(void) {
     
     /* Fill Ethernet header - broadcast */
     memset(arp->ethhdr.dest.addr, 0xff, 6);  /* Broadcast MAC */
-    memcpy(arp->ethhdr.src.addr, uip_ethaddr.addr, 6);
+    memcpy(arp->ethhdr.src.addr, mac_addr.addr, 6);  /* Use MAC from driver */
     arp->ethhdr.type = HTONS(UIP_ETHTYPE_ARP);
     
     /* Fill ARP header */
@@ -169,8 +180,8 @@ int network_init(void) {
     arp->protolen = 4;
     arp->opcode = HTONS(1);  /* ARP Request */
     
-    /* Sender hardware address (our MAC) */
-    memcpy(arp->shwaddr.addr, uip_ethaddr.addr, 6);
+    /* Sender hardware address (our MAC from driver) */
+    memcpy(arp->shwaddr.addr, mac_addr.addr, 6);
     
     /* Sender IP address (our IP) */
     uip_ipaddr_t our_ip;
