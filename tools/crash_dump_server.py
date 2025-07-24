@@ -157,21 +157,24 @@ class CrashDumpServer:
                 if self.registers and self.memory_regions:
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                     core_filename = f"core_{timestamp}.elf"
+                    bin_filename = f"dump_{timestamp}.bin"
                     elf_filename = "app.elf"  # User should provide their app ELF
                     
                     self.print_crash_summary()
                     self.create_core_dump(core_filename)
+                    self.create_binary_dump(bin_filename)
                     
-                    print(f"\n[SUCCESS] Core dump created: {core_filename}")
-                    print(f"\nTo debug:")
+                    print(f"\n[SUCCESS] Core dumps created:")
+                    print(f"  - ELF format: {core_filename}")
+                    print(f"  - Binary format: {bin_filename}")
+                    print(f"\nFor GDB analysis of ELF:")
                     print(f"1. Copy your application ELF to '{elf_filename}'")
                     print(f"2. Run: arm-none-eabi-gdb {elf_filename}")
                     print(f"3. In GDB: set architecture arm")
                     print(f"4. In GDB: core {core_filename}")
-                    print(f"5. In GDB: info registers")
-                    print(f"6. In GDB: bt    (to see backtrace)")
-                    print(f"7. In GDB: x/10x $sp  (to examine stack)")
-                    print(f"8. In GDB: list  (to see source at crash location)")
+                    print(f"\nFor loading binary dump into live target:")
+                    print(f"1. Connect to target with GDB")
+                    print(f"2. Run: load_crash_binary {bin_filename}")
                     
     def print_crash_summary(self):
         """Print summary of crash information"""
@@ -523,6 +526,76 @@ class CrashDumpServer:
             note.append(0)
             
         return note
+    
+    def create_binary_dump(self, filename):
+        """Create binary dump compatible with GDB script load_crash_binary"""
+        print(f"\nCreating binary dump: {filename}")
+        
+        with open(filename, 'wb') as f:
+            # Write all memory regions in order expected by GDB script
+            # The script expects specific offsets for each region
+            
+            # Calculate total size needed
+            total_size = 0x0d91bc  # End of last region in GDB script
+            
+            # Create buffer filled with 0xFF (unprogrammed flash pattern)
+            dump_data = bytearray(b'\xFF' * total_size)
+            
+            # Map our regions to GDB script expectations
+            region_mapping = {
+                'DTCM': {'start': 0x20000000, 'file_offset': 0x0001bc, 'size': 0x80000},
+                'AXI_SRAM': {'start': 0x24000000, 'file_offset': 0x0001bc, 'size': 0x80000},
+                'SRAM1': {'start': 0x30000000, 'file_offset': 0x0801bc, 'size': 0x20000},
+                'SRAM2': {'start': 0x30020000, 'file_offset': 0x0a01bc, 'size': 0x20000},
+                'SRAM3': {'start': 0x30040000, 'file_offset': 0x0c01bc, 'size': 0x08000},
+                'SRAM4': {'start': 0x38000000, 'file_offset': 0x0c81bc, 'size': 0x10000},
+                'BACKUP_SRAM': {'start': 0x38800000, 'file_offset': 0x0d81bc, 'size': 0x1000},
+            }
+            
+            # Fill memory regions
+            for region in self.memory_regions:
+                region_name = region['name']
+                if region_name in region_mapping:
+                    mapping = region_mapping[region_name]
+                    
+                    # Sort addresses and write data
+                    for addr, data in sorted(region['data'].items()):
+                        offset = addr - mapping['start']
+                        file_pos = mapping['file_offset'] + offset
+                        
+                        # Write data at correct position
+                        if file_pos + len(data) <= len(dump_data):
+                            dump_data[file_pos:file_pos + len(data)] = data
+            
+            # Write registers at offset 0x114 (as expected by GDB script)
+            # Format: prstatus structure with registers at offset 72
+            reg_offset = 0x114
+            
+            # Create minimal prstatus structure
+            prstatus = bytearray(148)  # Size from GDB script (0x1a8 - 0x114)
+            
+            # Skip to register offset (72 bytes into prstatus)
+            reg_pos = 72
+            
+            # Write registers in order expected by GDB
+            for i in range(13):
+                reg_name = f'R{i}'
+                value = self.registers.get(reg_name, 0)
+                struct.pack_into('<I', prstatus, reg_pos + i*4, value)
+            
+            # Special registers
+            struct.pack_into('<I', prstatus, reg_pos + 13*4, self.registers.get('SP', 0))
+            struct.pack_into('<I', prstatus, reg_pos + 14*4, self.registers.get('LR', 0))
+            struct.pack_into('<I', prstatus, reg_pos + 15*4, self.registers.get('PC', 0))
+            struct.pack_into('<I', prstatus, reg_pos + 16*4, self.registers.get('PSR', 0))
+            
+            # Write prstatus at expected offset
+            dump_data[reg_offset:reg_offset + len(prstatus)] = prstatus
+            
+            # Write to file
+            f.write(dump_data)
+            
+        print(f"Binary dump created: {os.path.getsize(filename)} bytes")
 
 def main():
     parser = argparse.ArgumentParser(description='STM32H7 Crash Dump Server - Creates GDB-compatible core dumps')
