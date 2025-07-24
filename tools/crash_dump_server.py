@@ -797,37 +797,16 @@ class CrashDumpServer:
             f.write("\n# Force thread detection without side effects\n")
             f.write("echo \\n=== Forcing thread detection ===\\n\n")
             
-            # Save all registers
-            f.write("# Save current state\n")
-            f.write("set $saved_r0 = $r0\n")
-            f.write("set $saved_r1 = $r1\n")
-            f.write("set $saved_r2 = $r2\n")
-            f.write("set $saved_r3 = $r3\n")
-            f.write("set $saved_sp = $sp\n")
+            # Save PC before stepping
+            f.write("# Save PC and step\n")
             f.write("set $saved_pc = $pc\n")
-            f.write("set $saved_xpsr = $xpsr\n\n")
+            f.write("stepi\n")
             
-            # Change instruction to NOP temporarily
-            f.write("# Replace current instruction with NOP\n")
-            f.write("set $saved_inst = *(unsigned short*)$pc\n")
-            f.write("set *(unsigned short*)$pc = 0xbf00\n\n")  # NOP in Thumb
+            # Restore PC to original crash location
+            f.write("# Restore PC to crash point\n")
+            f.write("set $pc = $saved_pc\n\n")
             
-            # Step safely (executes NOP)
-            f.write("# Step safely (executes NOP)\n")
-            f.write("stepi\n\n")
-            
-            # Restore everything
-            f.write("# Restore original state\n")
-            f.write("set *(unsigned short*)($pc-2) = $saved_inst\n")
-            f.write("set $r0 = $saved_r0\n")
-            f.write("set $r1 = $saved_r1\n")
-            f.write("set $r2 = $saved_r2\n")
-            f.write("set $r3 = $saved_r3\n")
-            f.write("set $sp = $saved_sp\n")
-            f.write("set $pc = $saved_pc\n")
-            f.write("set $xpsr = $saved_xpsr\n\n")
-            
-            f.write("echo State fully restored!\\n\n")
+            f.write("echo Thread detection complete - back at crash point\\n\n")
             f.write("info threads\n")
             
             # Final status
