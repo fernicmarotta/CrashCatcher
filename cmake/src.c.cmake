@@ -19,7 +19,7 @@ set(CC_SRC_STM32_FILES
 include(cmake/${CMAKE_C_COMPILER_ID}/src.c.cmake)
 
 # Include uIP sources
-include(cmake/lwip.cmake)
+include(cmake/uip.cmake)
 
 # CrashCatcher sources
 set(CC_SRC_CRASHCATCHER
