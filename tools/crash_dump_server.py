@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-TCP Server for receiving STM32H7 crash dumps and creating ELF files
-Compatible with CrashCatcher format for debugging with CrashDebug
+TCP Server for receiving STM32H7 crash dumps and creating ELF core dump files
+Creates ARM Cortex-M core dumps compatible with GDB for post-mortem debugging
 """
 
 import socket
@@ -10,8 +10,6 @@ import sys
 import argparse
 import os
 from datetime import datetime
-from elftools.elf.elffile import ELFFile
-from elftools.elf.structs import ELFStructs
 
 class CrashDumpServer:
     def __init__(self, host='0.0.0.0', port=9999):
@@ -20,6 +18,17 @@ class CrashDumpServer:
         self.dump_data = bytearray()
         self.registers = {}
         self.memory_regions = []
+        
+        # STM32H7 memory map
+        self.memory_map = [
+            {'name': 'DTCM',        'start': 0x20000000, 'end': 0x20020000},
+            {'name': 'AXI_SRAM',    'start': 0x24000000, 'end': 0x24080000},
+            {'name': 'SRAM1',       'start': 0x30000000, 'end': 0x30020000},
+            {'name': 'SRAM2',       'start': 0x30020000, 'end': 0x30040000},
+            {'name': 'SRAM3',       'start': 0x30040000, 'end': 0x30048000},
+            {'name': 'SRAM4',       'start': 0x38000000, 'end': 0x38010000},
+            {'name': 'BACKUP_SRAM', 'start': 0x38800000, 'end': 0x38801000},
+        ]
         
     def parse_hexdump_line(self, line):
         """Parse a line of hexdump format: XXXXXXXX: XX XX XX XX ..."""
@@ -134,33 +143,106 @@ class CrashDumpServer:
                 finally:
                     conn.close()
                     
-                # Generate ELF if we got data
+                # Generate core dump if we got data
                 if self.registers and self.memory_regions:
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    elf_filename = f"crash_dump_{timestamp}.elf"
-                    self.create_elf(elf_filename)
-                    print(f"\nELF file created: {elf_filename}")
-                    print(f"Use with CrashDebug: arm-none-eabi-gdb -ex 'target remote | CrashDebug --elf {elf_filename}'")
+                    core_filename = f"core_{timestamp}.elf"
+                    elf_filename = "app.elf"  # User should provide their app ELF
                     
-    def create_elf(self, filename):
-        """Create ELF file compatible with CrashDebug"""
-        # ELF header for ARM Cortex-M7
+                    self.print_crash_summary()
+                    self.create_core_dump(core_filename)
+                    
+                    print(f"\n[SUCCESS] Core dump created: {core_filename}")
+                    print(f"\nTo debug:")
+                    print(f"1. Copy your application ELF to '{elf_filename}'")
+                    print(f"2. Run: arm-none-eabi-gdb {elf_filename}")
+                    print(f"3. In GDB: set architecture arm")
+                    print(f"4. In GDB: core {core_filename}")
+                    print(f"5. In GDB: info registers")
+                    print(f"6. In GDB: bt    (to see backtrace)")
+                    print(f"7. In GDB: x/10x $sp  (to examine stack)")
+                    print(f"8. In GDB: list  (to see source at crash location)")
+                    
+    def print_crash_summary(self):
+        """Print summary of crash information"""
+        print("\n" + "="*60)
+        print("CRASH DUMP ANALYSIS")
+        print("="*60)
+        
+        # Print registers
+        print("\nCPU REGISTERS:")
+        print("-" * 40)
+        for i in range(0, 13, 4):
+            line = ""
+            for j in range(4):
+                if i+j < 13:
+                    reg = f"R{i+j}"
+                    if reg in self.registers:
+                        line += f"{reg:3}: 0x{self.registers[reg]:08X}  "
+            print(line)
+        
+        special_regs = ['SP', 'LR', 'PC', 'PSR']
+        line = ""
+        for reg in special_regs:
+            if reg in self.registers:
+                line += f"{reg:3}: 0x{self.registers[reg]:08X}  "
+        print(line)
+        
+        print("\nFAULT REGISTERS:")
+        print("-" * 40)
+        fault_regs = ['HFSR', 'CFSR', 'MMFAR', 'BFAR', 'AFSR']
+        for reg in fault_regs:
+            if reg in self.registers:
+                print(f"{reg:6}: 0x{self.registers[reg]:08X}")
+        
+        # Decode CFSR if available
+        if 'CFSR' in self.registers:
+            cfsr = self.registers['CFSR']
+            if cfsr & 0x00010000:
+                print("  -> UsageFault: Divide by zero")
+            if cfsr & 0x00020000:
+                print("  -> UsageFault: Unaligned access")
+            if cfsr & 0x00008000:
+                print("  -> BusFault: Precise data access violation")
+            if cfsr & 0x00001000:
+                print("  -> BusFault: Imprecise data access violation")
+            if cfsr & 0x00000080:
+                print("  -> MemManage: Data access violation")
+            if cfsr & 0x00000001:
+                print("  -> MemManage: Instruction access violation")
+        
+        # Print memory regions received
+        print("\nMEMORY REGIONS RECEIVED:")
+        print("-" * 40)
+        total_size = 0
+        for region in self.memory_regions:
+            size = 0
+            for addr, data in region['data'].items():
+                size += len(data)
+            total_size += size
+            print(f"{region['name']:12}: {size:8} bytes")
+        print(f"{'TOTAL':12}: {total_size:8} bytes ({total_size/1024:.1f} KB)")
+        print("="*60)
+        
+    def create_core_dump(self, filename):
+        """Create ELF core dump file compatible with GDB"""
+        # ELF header for ARM Cortex-M7 core dump
         e_ident = b'\x7fELF'  # Magic
         e_ident += b'\x01'    # 32-bit
         e_ident += b'\x01'    # Little endian
         e_ident += b'\x01'    # Current version
         e_ident += b'\x00' * 9  # Padding
         
-        # ELF header fields
-        e_type = 0x0002      # ET_EXEC
+        # ELF header fields for core dump
+        e_type = 0x0004      # ET_CORE (core dump)
         e_machine = 0x0028   # EM_ARM
         e_version = 0x00000001
-        e_entry = self.registers.get('PC', 0)
-        e_phoff = 0x34       # Program header offset
+        e_entry = 0          # No entry point for core dumps
+        e_phoff = 0x34       # Program header offset (52 bytes)
         e_shoff = 0          # No section headers
-        e_flags = 0x05000000 # ARM EABI
-        e_ehsize = 0x34      # ELF header size
-        e_phentsize = 0x20   # Program header entry size
+        e_flags = 0x05000200 # ARM EABI v5 + has entry point
+        e_ehsize = 0x34      # ELF header size (52 bytes)
+        e_phentsize = 0x20   # Program header entry size (32 bytes)
         e_phnum = 0          # Will be calculated
         e_shentsize = 0
         e_shnum = 0
@@ -169,18 +251,20 @@ class CrashDumpServer:
         # Build memory segments
         segments = []
         
-        # Add register note segment (for CrashDebug)
-        note_data = self.create_register_note()
+        # Create register note only (simplest approach)
+        notes = self.create_register_note()
+        
+        # Add notes segment
         segments.append({
             'type': 0x04,  # PT_NOTE
             'offset': 0,
             'vaddr': 0,
             'paddr': 0,
-            'filesz': len(note_data),
-            'memsz': len(note_data),
+            'filesz': len(notes),
+            'memsz': len(notes),
             'flags': 0x04,  # PF_R
             'align': 4,
-            'data': note_data
+            'data': notes
         })
         
         # Add memory segments
@@ -260,14 +344,14 @@ class CrashDumpServer:
             
             # Write program headers
             for seg in segments:
-                f.write(struct.pack('<I', seg['type']))
-                f.write(struct.pack('<I', seg['offset']))
-                f.write(struct.pack('<I', seg['vaddr']))
-                f.write(struct.pack('<I', seg['paddr']))
-                f.write(struct.pack('<I', seg['filesz']))
-                f.write(struct.pack('<I', seg['memsz']))
-                f.write(struct.pack('<I', seg['flags']))
-                f.write(struct.pack('<I', seg['align']))
+                f.write(struct.pack('<I', seg['type']))     # p_type
+                f.write(struct.pack('<I', seg['offset']))   # p_offset
+                f.write(struct.pack('<I', seg['vaddr']))    # p_vaddr
+                f.write(struct.pack('<I', seg['paddr']))    # p_paddr
+                f.write(struct.pack('<I', seg['filesz']))   # p_filesz
+                f.write(struct.pack('<I', seg['memsz']))    # p_memsz
+                f.write(struct.pack('<I', seg['flags']))    # p_flags
+                f.write(struct.pack('<I', seg['align']))    # p_align
             
             # Write segment data
             for seg in segments:
@@ -275,48 +359,165 @@ class CrashDumpServer:
                 f.write(seg['data'])
     
     def create_register_note(self):
-        """Create PT_NOTE segment with register values for CrashDebug"""
+        """Create PT_NOTE segment with register values for GDB"""
         # Note name "CORE\0"
         name = b'CORE\0'
         while len(name) % 4:
             name += b'\0'
         
-        # Build register data (matches CrashCatcher format)
-        # Order: R0-R12, SP, LR, PC, PSR, then fault registers
-        reg_data = bytearray()
+        # ARM elf_prstatus structure for bare metal
+        # Based on Linux kernel but simplified for bare metal
+        prstatus = bytearray()
         
-        # General purpose registers
+        # struct elf_prstatus {
+        #   struct elf_siginfo pr_info;  /* 12 bytes */
+        #   short pr_cursig;             /* 2 bytes */
+        #   unsigned long pr_sigpend;    /* 4 bytes */  
+        #   unsigned long pr_sighold;    /* 4 bytes */
+        #   pid_t pr_pid;                /* 4 bytes */
+        #   pid_t pr_ppid;               /* 4 bytes */
+        #   pid_t pr_pgrp;               /* 4 bytes */
+        #   pid_t pr_sid;                /* 4 bytes */
+        #   struct timeval pr_utime;     /* 8 bytes */
+        #   struct timeval pr_stime;     /* 8 bytes */
+        #   struct timeval pr_cutime;    /* 8 bytes */
+        #   struct timeval pr_cstime;    /* 8 bytes */
+        #   elf_gregset_t pr_reg;        /* GP registers */
+        #   int pr_fpvalid;              /* 4 bytes */
+        # };
+        
+        # pr_info (12 bytes) - signal info
+        prstatus.extend(struct.pack('<i', 11))    # si_signo = SIGSEGV
+        prstatus.extend(struct.pack('<i', 0))     # si_code
+        prstatus.extend(struct.pack('<i', 0))     # si_errno
+        
+        # pr_cursig (2 bytes)
+        prstatus.extend(struct.pack('<h', 11))    # SIGSEGV
+        
+        # Padding to align to 4 bytes
+        prstatus.extend(struct.pack('<h', 0))
+        
+        # pr_sigpend, pr_sighold (8 bytes)
+        prstatus.extend(struct.pack('<II', 0, 0))
+        
+        # pr_pid, pr_ppid, pr_pgrp, pr_sid (16 bytes)
+        prstatus.extend(struct.pack('<IIII', 1, 0, 1, 1))
+        
+        # pr_utime, pr_stime, pr_cutime, pr_cstime (32 bytes)
+        prstatus.extend(struct.pack('<QQQQ', 0, 0, 0, 0))
+        
+        # pr_reg - ARM register set (18 registers * 4 bytes = 72 bytes)
+        # Order: r0-r15, cpsr, orig_r0
         for i in range(13):
-            reg_name = f'R{i}'
-            value = self.registers.get(reg_name, 0)
-            reg_data.extend(struct.pack('<I', value))
+            value = self.registers.get(f'R{i}', 0)
+            prstatus.extend(struct.pack('<I', value))
         
-        # SP, LR, PC, PSR
-        for reg in ['SP', 'LR', 'PC', 'PSR']:
-            value = self.registers.get(reg, 0)
-            reg_data.extend(struct.pack('<I', value))
+        prstatus.extend(struct.pack('<I', self.registers.get('SP', 0)))   # r13
+        prstatus.extend(struct.pack('<I', self.registers.get('LR', 0)))   # r14
+        prstatus.extend(struct.pack('<I', self.registers.get('PC', 0)))   # r15
+        prstatus.extend(struct.pack('<I', self.registers.get('PSR', 0)))  # cpsr
+        prstatus.extend(struct.pack('<I', 0))                             # orig_r0
         
-        # Fault registers
-        for reg in ['HFSR', 'CFSR', 'MMFAR', 'BFAR', 'AFSR']:
-            value = self.registers.get(reg, 0)
-            reg_data.extend(struct.pack('<I', value))
+        # pr_fpvalid (4 bytes)
+        prstatus.extend(struct.pack('<I', 0))
         
         # Note header
         note = bytearray()
-        note.extend(struct.pack('<I', len(name)))  # namesz
-        note.extend(struct.pack('<I', len(reg_data)))  # descsz
-        note.extend(struct.pack('<I', 0x01))  # NT_PRSTATUS
+        note.extend(struct.pack('<I', len(name)))      # namesz
+        note.extend(struct.pack('<I', len(prstatus)))  # descsz  
+        note.extend(struct.pack('<I', 1))              # NT_PRSTATUS
         note.extend(name)
-        note.extend(reg_data)
+        note.extend(prstatus)
         
+        # Pad to 4-byte alignment
+        while len(note) % 4:
+            note.append(0)
+        
+        return note
+    
+    def create_thread_note(self):
+        """Create thread info note for GDB"""
+        name = b'CORE\0'
+        while len(name) % 4:
+            name += b'\0'
+            
+        # prpsinfo structure (minimal)
+        prpsinfo = bytearray()
+        
+        # state, sname, zomb, nice
+        prpsinfo.extend(struct.pack('<BBBB', 0, 0, 0, 0))
+        
+        # flag, uid, gid
+        prpsinfo.extend(struct.pack('<III', 0, 0, 0))
+        
+        # pid, ppid, pgrp, sid
+        prpsinfo.extend(struct.pack('<IIII', 1, 0, 1, 1))
+        
+        # fname (16 bytes) - command name
+        fname = b'stm32h7\0'
+        prpsinfo.extend(fname.ljust(16, b'\0'))
+        
+        # psargs (80 bytes) - command line
+        psargs = b'stm32h7 app\0'
+        prpsinfo.extend(psargs.ljust(80, b'\0'))
+        
+        # Note header
+        note = bytearray()
+        note.extend(struct.pack('<I', len(name)))      # namesz
+        note.extend(struct.pack('<I', len(prpsinfo)))  # descsz
+        note.extend(struct.pack('<I', 3))              # NT_PRPSINFO
+        note.extend(name)
+        note.extend(prpsinfo)
+        
+        # Pad to 4-byte alignment
+        while len(note) % 4:
+            note.append(0)
+            
+        return note
+    
+    def create_auxv_note(self):
+        """Create auxiliary vector note (helps GDB understand the target)"""
+        name = b'CORE\0'
+        while len(name) % 4:
+            name += b'\0'
+        
+        # Minimal auxv entries for ARM
+        auxv = bytearray()
+        
+        # AT_HWCAP = 16, Cortex-M7 capabilities
+        auxv.extend(struct.pack('<II', 16, 0x00001000))  # Has Thumb
+        
+        # AT_PAGESZ = 6, page size
+        auxv.extend(struct.pack('<II', 6, 4096))
+        
+        # AT_NULL = 0, end marker
+        auxv.extend(struct.pack('<II', 0, 0))
+        
+        # Note header
+        note = bytearray()
+        note.extend(struct.pack('<I', len(name)))     # namesz
+        note.extend(struct.pack('<I', len(auxv)))     # descsz
+        note.extend(struct.pack('<I', 6))             # NT_AUXV
+        note.extend(name)
+        note.extend(auxv)
+        
+        # Pad to 4-byte alignment
+        while len(note) % 4:
+            note.append(0)
+            
         return note
 
 def main():
-    parser = argparse.ArgumentParser(description='STM32H7 Crash Dump Server')
-    parser.add_argument('--host', default='0.0.0.0', help='Host to listen on')
-    parser.add_argument('--port', type=int, default=9999, help='Port to listen on')
+    parser = argparse.ArgumentParser(description='STM32H7 Crash Dump Server - Creates GDB-compatible core dumps')
+    parser.add_argument('--host', default='0.0.0.0', help='Host to listen on (default: 0.0.0.0)')
+    parser.add_argument('--port', type=int, default=9999, help='Port to listen on (default: 9999)')
     
     args = parser.parse_args()
+    
+    print(f"STM32H7 Crash Dump Server")
+    print(f"Creates ARM Cortex-M core dumps for GDB analysis")
+    print(f"Listening on {args.host}:{args.port}")
+    print(f"Press Ctrl+C to stop\n")
     
     server = CrashDumpServer(args.host, args.port)
     try:
