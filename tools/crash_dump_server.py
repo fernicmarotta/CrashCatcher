@@ -580,14 +580,14 @@ class CrashDumpServer:
             # Write registers in order expected by GDB
             for i in range(13):
                 reg_name = f'R{i}'
-                value = self.registers.get(reg_name, 0)
+                value = self.registers.get(reg_name, 0) & 0xFFFFFFFF
                 struct.pack_into('<I', prstatus, reg_pos + i*4, value)
             
-            # Special registers
-            struct.pack_into('<I', prstatus, reg_pos + 13*4, self.registers.get('SP', 0))
-            struct.pack_into('<I', prstatus, reg_pos + 14*4, self.registers.get('LR', 0))
-            struct.pack_into('<I', prstatus, reg_pos + 15*4, self.registers.get('PC', 0))
-            struct.pack_into('<I', prstatus, reg_pos + 16*4, self.registers.get('PSR', 0))
+            # Special registers - ensure 32-bit values
+            struct.pack_into('<I', prstatus, reg_pos + 13*4, self.registers.get('SP', 0) & 0xFFFFFFFF)
+            struct.pack_into('<I', prstatus, reg_pos + 14*4, self.registers.get('LR', 0) & 0xFFFFFFFF)
+            struct.pack_into('<I', prstatus, reg_pos + 15*4, self.registers.get('PC', 0) & 0xFFFFFFFF)
+            struct.pack_into('<I', prstatus, reg_pos + 16*4, self.registers.get('PSR', 0) & 0xFFFFFFFF)
             
             # Write prstatus at expected offset
             dump_data[reg_offset:reg_offset + len(prstatus)] = prstatus

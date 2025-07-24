@@ -130,25 +130,29 @@ define load_crash_binary
 
     # Load registers
     echo \n=== Restoring registers ===\n
-    restore $arg0 binary 0x20000000 0x114 0x1a8
+    # Registers are at offset 0x114 + 72 (prstatus offset) = 0x15C
+    # Use a safe scratch area in DTCM to load register data
+    set $scratch = 0x20000000
+    restore $arg0 binary $scratch 0x15C 0x19C
 
-    set $r0  = *(unsigned int*)(0x20000000 + 0x18)
-    set $r1  = *(unsigned int*)(0x20000000 + 0x1C)
-    set $r2  = *(unsigned int*)(0x20000000 + 0x20)
-    set $r3  = *(unsigned int*)(0x20000000 + 0x24)
-    set $r4  = *(unsigned int*)(0x20000000 + 0x28)
-    set $r5  = *(unsigned int*)(0x20000000 + 0x2C)
-    set $r6  = *(unsigned int*)(0x20000000 + 0x30)
-    set $r7  = *(unsigned int*)(0x20000000 + 0x34)
-    set $r8  = *(unsigned int*)(0x20000000 + 0x38)
-    set $r9  = *(unsigned int*)(0x20000000 + 0x3C)
-    set $r10 = *(unsigned int*)(0x20000000 + 0x40)
-    set $r11 = *(unsigned int*)(0x20000000 + 0x44)
-    set $r12 = *(unsigned int*)(0x20000000 + 0x48)
-    set $sp  = *(unsigned int*)(0x20000000 + 0x4C)
-    set $lr  = *(unsigned int*)(0x20000000 + 0x50)
-    set $pc  = *(unsigned int*)(0x20000000 + 0x54)
-    set $xpsr = *(unsigned int*)(0x20000000 + 0x58)
+    # Now set registers from the loaded data
+    set $r0  = *(unsigned int*)($scratch + 0x00)
+    set $r1  = *(unsigned int*)($scratch + 0x04)
+    set $r2  = *(unsigned int*)($scratch + 0x08)
+    set $r3  = *(unsigned int*)($scratch + 0x0C)
+    set $r4  = *(unsigned int*)($scratch + 0x10)
+    set $r5  = *(unsigned int*)($scratch + 0x14)
+    set $r6  = *(unsigned int*)($scratch + 0x18)
+    set $r7  = *(unsigned int*)($scratch + 0x1C)
+    set $r8  = *(unsigned int*)($scratch + 0x20)
+    set $r9  = *(unsigned int*)($scratch + 0x24)
+    set $r10 = *(unsigned int*)($scratch + 0x28)
+    set $r11 = *(unsigned int*)($scratch + 0x2C)
+    set $r12 = *(unsigned int*)($scratch + 0x30)
+    set $sp  = *(unsigned int*)($scratch + 0x34)
+    set $lr  = *(unsigned int*)($scratch + 0x38)
+    set $pc  = *(unsigned int*)($scratch + 0x3C)
+    set $xpsr = *(unsigned int*)($scratch + 0x40)
 
     echo \n=== State restored! ===\n
     printf "PC = 0x%08x  ", $pc
