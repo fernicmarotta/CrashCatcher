@@ -697,8 +697,10 @@ class CrashDumpServer:
             
             # Force GUI update (for IDEs like CLion)
             f.write("# Update IDE view to show crash location\n")
+            f.write("info threads\n")  # List all threads
+            f.write("thread 1\n")  # Select main thread
             f.write("frame 0\n")  # Select current frame
-            f.write("thread apply all bt\n\n")  # Update thread view
+            f.write("thread apply all bt 5\n\n")  # Show first 5 frames of all threads
             
             # Analyze fault registers if available
             f.write("# Check fault registers\n")
@@ -723,9 +725,21 @@ class CrashDumpServer:
             # Final commands to position at crash
             f.write("# Position at crash location\n")
             f.write("echo \\n=== Positioning at crash location ===\\n\n")
-            f.write("# Continue to PC (this will stop immediately at current PC)\n")
+            
+            # Refresh thread and debug views
+            f.write("# Refresh debugger views\n")
+            f.write("info threads\n")  # Update thread list
+            f.write("info locals\n")   # Update local variables
+            f.write("info args\n")     # Update function arguments
+            f.write("thread 1\n")      # Ensure we're on main thread
+            
             f.write("# This forces IDEs to update their view\n")
             f.write("stepi 0\n")  # Step 0 instructions = refresh view
+            
+            # Final status
+            f.write("\necho \\n=== Crash dump loaded successfully! ===\\n\n")
+            f.write("echo You are now at the exact point of the crash.\\n\n")
+            f.write("echo Use 'bt' for backtrace, 'info locals' for variables.\\n\n")
             
         print(f"GDB script created: {os.path.getsize(filename)} bytes")
 
