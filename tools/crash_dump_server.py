@@ -762,7 +762,7 @@ class CrashDumpServer:
             
             f.write("# Select thread that crashed and position there\n")
             f.write("thread 1\n")  # Select main/crashed thread
-            f.write("frame 0\n")  # Select current frame
+            # Don't use frame 0 as it may fail without debug info
             
             # Analyze fault registers if available
             f.write("# Check fault registers\n")
