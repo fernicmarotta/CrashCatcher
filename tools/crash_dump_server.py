@@ -234,28 +234,113 @@ class CrashDumpServer:
             print("-" * 40)
             print(f"NVIC_ISER0: 0x{self.registers['NVIC_ISER0']:08X} (Enabled interrupts)")
         
-        print("\nFAULT REGISTERS:")
+        print("\nFAULT STATUS REGISTERS:")
         print("-" * 40)
-        fault_regs = ['HFSR', 'CFSR', 'MMFAR', 'BFAR', 'AFSR']
-        for reg in fault_regs:
-            if reg in self.registers:
-                print(f"{reg:6}: 0x{self.registers[reg]:08X}")
         
-        # Decode CFSR if available
+        # HFSR Analysis
+        if 'HFSR' in self.registers:
+            hfsr = self.registers['HFSR']
+            print(f"HFSR  : 0x{hfsr:08X} (HardFault Status Register)")
+            print(f"        [31] DEBUGEVT  = {(hfsr >> 31) & 1} : {'Debug event occurred' if hfsr & 0x80000000 else 'No debug event occurred'}")
+            print(f"        [30] FORCED    = {(hfsr >> 30) & 1} : {'Fault escalated to HardFault' if hfsr & 0x40000000 else 'No escalation'}")
+            print(f"        [1]  VECTTBL   = {(hfsr >> 1) & 1} : {'Vector table read fault' if hfsr & 0x00000002 else 'No vector table read fault'}")
+            print()
+        
+        # CFSR Analysis
         if 'CFSR' in self.registers:
             cfsr = self.registers['CFSR']
-            if cfsr & 0x00010000:
-                print("  -> UsageFault: Divide by zero")
-            if cfsr & 0x00020000:
-                print("  -> UsageFault: Unaligned access")
-            if cfsr & 0x00008000:
-                print("  -> BusFault: Precise data access violation")
-            if cfsr & 0x00001000:
-                print("  -> BusFault: Imprecise data access violation")
-            if cfsr & 0x00000080:
-                print("  -> MemManage: Data access violation")
-            if cfsr & 0x00000001:
-                print("  -> MemManage: Instruction access violation")
+            ufsr = (cfsr >> 16) & 0xFFFF
+            bfsr = (cfsr >> 8) & 0xFF
+            mmfsr = cfsr & 0xFF
+            
+            print(f"CFSR  : 0x{cfsr:08X} (Configurable Fault Status Register)")
+            print(f"        ")
+            print(f"        UFSR (UsageFault Status Register) = 0x{ufsr:04X}")
+            print(f"        [25] DIVBYZERO = {(cfsr >> 25) & 1} : {'Divide by zero occurred' if cfsr & 0x02000000 else 'No divide by zero'}")
+            print(f"        [24] UNALIGNED = {(cfsr >> 24) & 1} : {'Unaligned memory access' if cfsr & 0x01000000 else 'No unaligned access'}")
+            print(f"        [19] NOCP      = {(cfsr >> 19) & 1} : {'Coprocessor access' if cfsr & 0x00080000 else 'No coprocessor usage fault'}")
+            print(f"        [18] INVPC     = {(cfsr >> 18) & 1} : {'Invalid PC load' if cfsr & 0x00040000 else 'No invalid PC load'}")
+            print(f"        [17] INVSTATE  = {(cfsr >> 17) & 1} : {'Invalid state' if cfsr & 0x00020000 else 'No invalid state'}")
+            print(f"        [16] UNDEFINSTR= {(cfsr >> 16) & 1} : {'Undefined instruction' if cfsr & 0x00010000 else 'No undefined instruction'}")
+            print(f"        ")
+            print(f"        BFSR (BusFault Status Register) = 0x{bfsr:02X}")
+            print(f"        [15] BFARVALID = {(cfsr >> 15) & 1} : {'BFAR contains valid address' if cfsr & 0x00008000 else 'BFAR does not contain valid address'}")
+            print(f"        [13] LSPERR    = {(cfsr >> 13) & 1} : {'Lazy state preservation error' if cfsr & 0x00002000 else 'No lazy state preservation error'}")
+            print(f"        [12] STKERR    = {(cfsr >> 12) & 1} : {'Stacking error' if cfsr & 0x00001000 else 'No stacking error'}")
+            print(f"        [11] UNSTKERR  = {(cfsr >> 11) & 1} : {'Unstacking error' if cfsr & 0x00000800 else 'No unstacking error'}")
+            print(f"        [10] IMPRECISERR= {(cfsr >> 10) & 1} : {'Imprecise data access error' if cfsr & 0x00000400 else 'No imprecise data access error'}")
+            print(f"        [9]  PRECISERR = {(cfsr >> 9) & 1} : {'Precise data access error' if cfsr & 0x00000200 else 'No precise data access error'}")
+            print(f"        [8]  IBUSERR   = {(cfsr >> 8) & 1} : {'Instruction bus error' if cfsr & 0x00000100 else 'No instruction bus error'}")
+            print(f"        ")
+            print(f"        MMFSR (MemManage Fault Status Register) = 0x{mmfsr:02X}")
+            print(f"        [7]  MMARVALID = {(cfsr >> 7) & 1} : {'MMFAR contains valid address' if cfsr & 0x00000080 else 'MMFAR does not contain valid address'}")
+            print(f"        [5]  MLSPERR   = {(cfsr >> 5) & 1} : {'Lazy state preservation error' if cfsr & 0x00000020 else 'No lazy state preservation error'}")
+            print(f"        [4]  MSTKERR   = {(cfsr >> 4) & 1} : {'Stacking error' if cfsr & 0x00000010 else 'No stacking error'}")
+            print(f"        [3]  MUNSTKERR = {(cfsr >> 3) & 1} : {'Unstacking error' if cfsr & 0x00000008 else 'No unstacking error'}")
+            print(f"        [1]  DACCVIOL  = {(cfsr >> 1) & 1} : {'Data access violation' if cfsr & 0x00000002 else 'No data access violation'}")
+            print(f"        [0]  IACCVIOL  = {cfsr & 1} : {'Instruction access violation' if cfsr & 0x00000001 else 'No instruction access violation'}")
+            print()
+        
+        # Print address registers
+        if 'MMFAR' in self.registers:
+            mmfar = self.registers['MMFAR']
+            valid = " - VALID" if 'CFSR' in self.registers and self.registers['CFSR'] & 0x00000080 else " - NOT VALID"
+            print(f"MMFAR : 0x{mmfar:08X} (MemManage Fault Address Register{valid})")
+        
+        if 'BFAR' in self.registers:
+            bfar = self.registers['BFAR']
+            valid = " - VALID" if 'CFSR' in self.registers and self.registers['CFSR'] & 0x00008000 else " - NOT VALID"
+            print(f"BFAR  : 0x{bfar:08X} (BusFault Address Register{valid})")
+            
+        if 'AFSR' in self.registers:
+            print(f"AFSR  : 0x{self.registers['AFSR']:08X} (Auxiliary Fault Status Register)")
+        
+        # Analyze fault
+        print("\nFAULT ANALYSIS:")
+        print("-" * 40)
+        if 'CFSR' in self.registers and 'HFSR' in self.registers:
+            cfsr = self.registers['CFSR']
+            hfsr = self.registers['HFSR']
+            
+            # Determine primary fault
+            primary_fault = "Unknown"
+            fault_details = []
+            
+            if (cfsr >> 16) & 0xFFFF:  # UsageFault
+                primary_fault = "UsageFault"
+                if cfsr & 0x02000000:
+                    fault_details.append("DIVBYZERO - Division by zero")
+                    fault_details.append("  Check: DIV_0_TRP must be set in CCR for this trap")
+                if cfsr & 0x01000000:
+                    fault_details.append("UNALIGNED - Unaligned memory access")
+                    fault_details.append("  - 32-bit access must be 4-byte aligned")
+                    fault_details.append("  - 16-bit access must be 2-byte aligned")
+                    fault_details.append("  Check: UNALIGN_TRP in CCR")
+                    
+            elif (cfsr >> 8) & 0xFF:  # BusFault
+                primary_fault = "BusFault"
+                if cfsr & 0x00000200:
+                    fault_details.append("PRECISERR - Precise data bus error")
+                    if cfsr & 0x00008000:
+                        fault_details.append(f"  Fault address: 0x{self.registers.get('BFAR', 0):08X}")
+                        
+            elif cfsr & 0xFF:  # MemManage
+                primary_fault = "MemManage Fault"
+                if cfsr & 0x00000002:
+                    fault_details.append("DACCVIOL - Data access violation")
+                    if cfsr & 0x00000080:
+                        fault_details.append(f"  Fault address: 0x{self.registers.get('MMFAR', 0):08X}")
+            
+            print(f"Primary Fault: {primary_fault}")
+            for detail in fault_details:
+                print(f"  {detail}")
+                
+            if hfsr & 0x40000000:
+                print("\nEscalation: Fault escalated to HardFault")
+                print("  The fault escalated because:")
+                print("  - Fault handler is not enabled (check SHCSR)")
+                print("  - Fault handler priority is misconfigured")
+                print("  - A fault occurred inside the fault handler")
         
         # Print memory regions received
         print("\nMEMORY REGIONS RECEIVED:")
@@ -743,27 +828,8 @@ class CrashDumpServer:
             f.write("echo \\n=== CPU Registers ===\\n\n")
             f.write("info registers\n\n")
             
-            # Check if we should use PSP based on EXC_RETURN value
-            f.write("# Check if we should use PSP based on EXC_RETURN\n")
-            lr_at_fault = self.registers.get('LR_AT_FAULT', 0)
-            if lr_at_fault:
-                f.write(f"# EXC_RETURN = 0x{lr_at_fault:08X}\n")
-                if lr_at_fault & 0x4:  # Bit 2 set means return to Thread mode (PSP)
-                    f.write("echo Using PSP for stack unwinding (Thread mode)...\\n\n")
-                    f.write("set $sp = $psp\n\n")
-                else:
-                    f.write("echo Using MSP for stack unwinding (Handler mode)...\\n\n") 
-                    f.write("set $sp = $msp\n\n")
-            else:
-                # Fallback to CONTROL register if no EXC_RETURN
-                f.write("# No EXC_RETURN available, using CONTROL register\n")
-                f.write("if ($control & 0x2)\n")
-                f.write("  echo Using PSP for stack unwinding...\\n\n")
-                f.write("  set $sp = $psp\n")
-                f.write("else\n")
-                f.write("  echo Using MSP for stack unwinding...\\n\n")
-                f.write("  set $sp = $msp\n")
-                f.write("end\n\n")
+            # Note: We don't adjust SP here because the crash handler already saved it correctly
+            # The SP in the dump already points to the right location for GDB backtrace
             
             # Show backtrace
             f.write("# Show backtrace\n")
@@ -789,24 +855,215 @@ class CrashDumpServer:
             # Don't select a specific thread - use the current thread
             # GDB will already be on the crashed thread after loading PC
             
-            # Analyze fault registers if available
-            f.write("\n# Check fault registers\n")
-            f.write("echo \\n=== Fault Status Registers ===\\n\n")
-            f.write("set $cfsr = *(unsigned int*)0xE000ED28\n")
-            f.write("set $hfsr = *(unsigned int*)0xE000ED2C\n")
-            f.write("printf \"CFSR = 0x%08x\\n\", $cfsr\n")
-            f.write("printf \"HFSR = 0x%08x\\n\", $hfsr\n\n")
+            # Analyze SCB Configuration from dump memory
+            f.write("\n# Read System Control Block configuration from dump\n")
+            f.write("echo \\n=== System Configuration (from dump) ===\\n\n")
             
-            # Decode CFSR bits
-            f.write("# Decode fault cause\n")
-            f.write("if ($hfsr & 0x40000000)\n")
-            f.write("  echo - FORCED: Hard fault escalated from another fault\\n\n")
-            f.write("end\n")
+            # CCR - Configuration Control Register
+            f.write("# Configuration Control Register (CCR) at 0xE000ED14\n")
+            f.write("set $ccr = *(unsigned int*)0xE000ED14\n")
+            f.write("printf \"CCR = 0x%08x\\n\", $ccr\n")
+            f.write("printf \"  [9]  STKALIGN   = %d : %s\\n\", ($ccr >> 9) & 1, ($ccr & 0x200) ? \"8-byte stack alignment\" : \"4-byte stack alignment\"\n")
+            f.write("printf \"  [8]  BFHFNMIGN  = %d : %s\\n\", ($ccr >> 8) & 1, ($ccr & 0x100) ? \"Ignore BusFault in NMI/HardFault\" : \"Fault handlers enabled\"\n")
+            f.write("printf \"  [4]  DIV_0_TRP  = %d : %s\\n\", ($ccr >> 4) & 1, ($ccr & 0x10) ? \"Divide by zero trap ENABLED\" : \"Divide by zero trap DISABLED\"\n")
+            f.write("printf \"  [3]  UNALIGN_TRP= %d : %s\\n\", ($ccr >> 3) & 1, ($ccr & 0x08) ? \"Unaligned access trap ENABLED\" : \"Unaligned access trap DISABLED\"\n")
+            f.write("printf \"  [1]  NONBASETHRDENA = %d : %s\\n\", ($ccr >> 1) & 1, ($ccr & 0x02) ? \"Thread mode can use PSP\" : \"Thread mode uses MSP only\"\n")
+            f.write("\n")
+            
+            # SHCSR - System Handler Control and State Register
+            f.write("# System Handler Control and State Register (SHCSR) at 0xE000ED24\n")
+            f.write("set $shcsr = *(unsigned int*)0xE000ED24\n")
+            f.write("printf \"SHCSR = 0x%08x\\n\", $shcsr\n")
+            f.write("printf \"  [18] USGFAULTENA = %d : UsageFault handler %s\\n\", ($shcsr >> 18) & 1, ($shcsr & 0x40000) ? \"ENABLED\" : \"DISABLED\"\n")
+            f.write("printf \"  [17] BUSFAULTENA = %d : BusFault handler %s\\n\", ($shcsr >> 17) & 1, ($shcsr & 0x20000) ? \"ENABLED\" : \"DISABLED\"\n")
+            f.write("printf \"  [16] MEMFAULTENA = %d : MemManage handler %s\\n\", ($shcsr >> 16) & 1, ($shcsr & 0x10000) ? \"ENABLED\" : \"DISABLED\"\n")
+            f.write("\n")
+            
+            # Check if all handlers are disabled
+            f.write("if (($shcsr & 0x70000) == 0)\n")
+            f.write("  echo ** WARNING: All configurable fault handlers are DISABLED!\\n\n")
+            f.write("  echo ** All faults will escalate to HardFault!\\n\\n\n")
+            f.write("end\n\n")
+            
+            # Analyze fault registers
+            f.write("# Fault Status Registers\n")
+            f.write("echo \\n=== Fault Status Registers ===\\n\n")
+            
+            # Use the fault register values from the crash dump
+            if 'CFSR' in self.registers:
+                f.write(f"set $cfsr = 0x{self.registers.get('CFSR', 0) & 0xFFFFFFFF:08X}\n")
+            else:
+                f.write("set $cfsr = *(unsigned int*)0xE000ED28\n")
+                
+            if 'HFSR' in self.registers:
+                f.write(f"set $hfsr = 0x{self.registers.get('HFSR', 0) & 0xFFFFFFFF:08X}\n")
+            else:
+                f.write("set $hfsr = *(unsigned int*)0xE000ED2C\n")
+                
+            f.write("printf \"CFSR = 0x%08x\\n\", $cfsr\n")
+            f.write("printf \"HFSR = 0x%08x\\n\", $hfsr\n")
+            
+            # Also read MMFAR and BFAR
+            if 'MMFAR' in self.registers:
+                f.write(f"set $mmfar = 0x{self.registers.get('MMFAR', 0) & 0xFFFFFFFF:08X}\n")
+            else:
+                f.write("set $mmfar = *(unsigned int*)0xE000ED34\n")
+                
+            if 'BFAR' in self.registers:
+                f.write(f"set $bfar = 0x{self.registers.get('BFAR', 0) & 0xFFFFFFFF:08X}\n")
+            else:
+                f.write("set $bfar = *(unsigned int*)0xE000ED38\n")
+                
+            f.write("printf \"MMFAR = 0x%08x (MemManage Fault Address Register)\\n\", $mmfar\n")
+            f.write("printf \"BFAR  = 0x%08x (BusFault Address Register)\\n\", $bfar\n\n")
+            
+            # Decode HFSR
+            f.write("# Decode HardFault Status Register\n")
+            f.write("echo \\n=== HardFault Status ===\\n\n")
+            f.write("printf \"HFSR = 0x%08x (HardFault Status Register)\\n\", $hfsr\n")
+            f.write("printf \"  [31] DEBUGEVT  = %d : %s\\n\", ($hfsr >> 31) & 1, ($hfsr & 0x80000000) ? \"Debug event occurred\" : \"No debug event\"\n")
+            f.write("printf \"  [30] FORCED    = %d : %s\\n\", ($hfsr >> 30) & 1, ($hfsr & 0x40000000) ? \"Fault escalated to HardFault\" : \"Direct HardFault\"\n")
+            f.write("printf \"  [1]  VECTTBL   = %d : %s\\n\", ($hfsr >> 1) & 1, ($hfsr & 0x00000002) ? \"Vector table read fault\" : \"No vector table fault\"\n\n")
+            
+            # Decode CFSR
+            f.write("# Decode Configurable Fault Status Register\n")
+            f.write("echo \\n=== CFSR Detailed Analysis ===\\n\n")
+            f.write("printf \"CFSR = 0x%08x (Configurable Fault Status Register)\\n\", $cfsr\n")
+            f.write("set $ufsr = ($cfsr >> 16) & 0xFFFF\n")
+            f.write("set $bfsr = ($cfsr >> 8) & 0xFF\n")
+            f.write("set $mmfsr = $cfsr & 0xFF\n")
+            f.write("printf \"  UsageFault  (bits 31:16) = 0x%04x\\n\", $ufsr\n")
+            f.write("printf \"  BusFault    (bits 15:8)  = 0x%02x\\n\", $bfsr\n")
+            f.write("printf \"  MemManage   (bits 7:0)   = 0x%02x\\n\\n\", $mmfsr\n")
+            # Check if fault address registers are valid and use dump values
             f.write("if ($cfsr & 0x00008000)\n")
-            f.write("  printf \"- BFAR valid: 0x%08x\\n\", *(unsigned int*)0xE000ED38\n")
+            if 'BFAR' in self.registers:
+                f.write(f"  printf \"- BFAR valid: 0x%08x\\n\", 0x{self.registers.get('BFAR', 0) & 0xFFFFFFFF:08X}\n")
+            else:
+                f.write("  printf \"- BFAR valid: 0x%08x\\n\", *(unsigned int*)0xE000ED38\n")
             f.write("end\n")
+            
             f.write("if ($cfsr & 0x00000080)\n")
-            f.write("  printf \"- MMFAR valid: 0x%08x\\n\", *(unsigned int*)0xE000ED34\n")
+            if 'MMFAR' in self.registers:
+                f.write(f"  printf \"- MMFAR valid: 0x%08x\\n\", 0x{self.registers.get('MMFAR', 0) & 0xFFFFFFFF:08X}\n")
+            else:
+                f.write("  printf \"- MMFAR valid: 0x%08x\\n\", *(unsigned int*)0xE000ED34\n")
+            f.write("end\n")
+            
+            # Decode all CFSR bits according to ARM documentation
+            f.write("\n# Decode CFSR fault bits\n")
+            f.write("set $ufsr = ($cfsr >> 16) & 0xFFFF\n")
+            f.write("set $bfsr = ($cfsr >> 8) & 0xFF\n")
+            f.write("set $mmfsr = $cfsr & 0xFF\n\n")
+            
+            # UsageFault decoding
+            f.write("if $ufsr\n")
+            f.write("  echo \\n--- UsageFault Status ---\\n\n")
+            f.write("  if ($cfsr & 0x02000000)\n")
+            f.write("    echo - DIVBYZERO: Division by zero occurred\\n\n")
+            f.write("  end\n")
+            f.write("  if ($cfsr & 0x01000000)\n")
+            f.write("    echo - UNALIGNED: Unaligned memory access\\n\n")
+            f.write("  end\n")
+            f.write("  if ($cfsr & 0x00080000)\n")
+            f.write("    echo - NOCP: Attempted to access a coprocessor\\n\n")
+            f.write("  end\n")
+            f.write("  if ($cfsr & 0x00040000)\n")
+            f.write("    echo - INVPC: Invalid PC load (illegal EXC_RETURN)\\n\n")
+            f.write("  end\n")
+            f.write("  if ($cfsr & 0x00020000)\n")
+            f.write("    echo - INVSTATE: Invalid state (EPSR.T bit issue)\\n\n")
+            f.write("  end\n")
+            f.write("  if ($cfsr & 0x00010000)\n")
+            f.write("    echo - UNDEFINSTR: Undefined instruction executed\\n\n")
+            f.write("  end\n")
+            f.write("end\n\n")
+            
+            # BusFault decoding
+            f.write("if $bfsr\n")
+            f.write("  echo \\n--- BusFault Status ---\\n\n")
+            f.write("  if ($cfsr & 0x00002000)\n")
+            f.write("    echo - LSPERR: Bus fault on floating-point lazy state preservation\\n\n")
+            f.write("  end\n")
+            f.write("  if ($cfsr & 0x00001000)\n")
+            f.write("    echo - STKERR: Bus fault on exception stacking\\n\n")
+            f.write("  end\n")
+            f.write("  if ($cfsr & 0x00000800)\n")
+            f.write("    echo - UNSTKERR: Bus fault on exception unstacking\\n\n")
+            f.write("  end\n")
+            f.write("  if ($cfsr & 0x00000400)\n")
+            f.write("    echo - IMPRECISERR: Imprecise data bus error\\n\n")
+            f.write("  end\n")
+            f.write("  if ($cfsr & 0x00000200)\n")
+            f.write("    echo - PRECISERR: Precise data bus error\\n\n")
+            f.write("  end\n")
+            f.write("  if ($cfsr & 0x00000100)\n")
+            f.write("    echo - IBUSERR: Instruction bus error\\n\n")
+            f.write("  end\n")
+            f.write("end\n\n")
+            
+            # MemManage Fault decoding
+            f.write("if $mmfsr\n")
+            f.write("  echo \\n--- MemManage Status ---\\n\n")
+            f.write("  if ($cfsr & 0x00000020)\n")
+            f.write("    echo - MLSPERR: MemManage fault on floating-point lazy state preservation\\n\n")
+            f.write("  end\n")
+            f.write("  if ($cfsr & 0x00000010)\n")
+            f.write("    echo - MSTKERR: MemManage fault on exception stacking\\n\n")
+            f.write("  end\n")
+            f.write("  if ($cfsr & 0x00000008)\n")
+            f.write("    echo - MUNSTKERR: MemManage fault on exception unstacking\\n\n")
+            f.write("  end\n")
+            f.write("  if ($cfsr & 0x00000002)\n")
+            f.write("    echo - DACCVIOL: Data access violation\\n\n")
+            f.write("  end\n")
+            f.write("  if ($cfsr & 0x00000001)\n")
+            f.write("    echo - IACCVIOL: Instruction access violation\\n\n")
+            f.write("  end\n")
+            f.write("end\n\n")
+            
+            # Add fault analysis summary
+            f.write("\n# Fault Analysis Summary\n")
+            f.write("echo \\n=== Fault Analysis Summary ===\\n\n")
+            
+            # Check primary fault type
+            f.write("if $ufsr\n")
+            f.write("  echo Primary Fault: UsageFault\\n\n")
+            f.write("  if ($cfsr & 0x01000000)\n")
+            f.write("    echo   - UNALIGNED access detected\\n\n")
+            f.write("    if (($ccr & 0x08) == 0)\n")
+            f.write("      echo   - WARNING: UNALIGN_TRP is DISABLED but fault occurred!\\n\n")
+            f.write("    end\n")
+            f.write("  end\n")
+            f.write("  if ($cfsr & 0x02000000)\n")
+            f.write("    echo   - DIVBYZERO detected\\n\n")
+            f.write("    if (($ccr & 0x10) == 0)\n")
+            f.write("      echo   - WARNING: DIV_0_TRP is DISABLED but fault occurred!\\n\n")
+            f.write("    end\n")
+            f.write("  end\n")
+            f.write("end\n")
+            
+            f.write("if $bfsr && !$ufsr\n")
+            f.write("  echo Primary Fault: BusFault\\n\n")
+            f.write("end\n")
+            
+            f.write("if $mmfsr && !$ufsr && !$bfsr\n")
+            f.write("  echo Primary Fault: MemManage Fault\\n\n")
+            f.write("end\n")
+            
+            # Check escalation
+            f.write("if ($hfsr & 0x40000000)\n")
+            f.write("  echo Escalation to HardFault detected!\\n\n")
+            f.write("  echo Possible reasons:\\n\n")
+            f.write("  if $ufsr && (($shcsr & 0x40000) == 0)\n")
+            f.write("    echo   - UsageFault handler DISABLED (USGFAULTENA=0)\\n\n")
+            f.write("  end\n")
+            f.write("  if $bfsr && (($shcsr & 0x20000) == 0)\n")
+            f.write("    echo   - BusFault handler DISABLED (BUSFAULTENA=0)\\n\n")
+            f.write("  end\n")
+            f.write("  if $mmfsr && (($shcsr & 0x10000) == 0)\n")
+            f.write("    echo   - MemManage handler DISABLED (MEMFAULTENA=0)\\n\n")
+            f.write("  end\n")
             f.write("end\n\n")
             
             # Final commands to position at crash

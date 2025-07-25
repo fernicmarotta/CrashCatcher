@@ -91,3 +91,62 @@ void crash_dump_test(void)
     /* Should never reach here */
     while(1);
 }
+
+/**
+ * @brief Force a divide by zero crash (UsageFault)
+ * WARNING: This will crash the system!
+ */
+void crash_dump_test_divzero(void)
+{
+    /* Enable divide by zero trap */
+    SCB->CCR |= SCB_CCR_DIV_0_TRP_Msk;
+    
+    /* Disable interrupts to ensure clean crash */
+    __disable_irq();
+    
+    /* Force divide by zero */
+    volatile int a = 10;
+    volatile int b = 0;
+    volatile int c = a / b;  /* This will trigger UsageFault */
+    
+    /* Should never reach here */
+    (void)c;
+    while(1);
+}
+
+/**
+ * @brief Force an unaligned access crash (UsageFault)
+ * WARNING: This will crash the system!
+ */
+void crash_dump_test_unaligned(void)
+{
+    /* Enable unaligned access trap */
+    SCB->CCR |= SCB_CCR_UNALIGN_TRP_Msk;
+    
+    /* Disable interrupts to ensure clean crash */
+    __disable_irq();
+    
+    /* Force unaligned access */
+    volatile uint32_t *ptr = (uint32_t*)0x20000001;  /* Odd address */
+    volatile uint32_t val = *ptr;  /* This will trigger UsageFault */
+    
+    /* Should never reach here */
+    (void)val;
+    while(1);
+}
+
+/**
+ * @brief Force an undefined instruction crash (UsageFault)
+ * WARNING: This will crash the system!
+ */
+void crash_dump_test_undefined(void)
+{
+    /* Disable interrupts to ensure clean crash */
+    __disable_irq();
+    
+    /* Execute undefined instruction */
+    __asm volatile (".word 0xDE00");  /* Undefined Thumb instruction */
+    
+    /* Should never reach here */
+    while(1);
+}
