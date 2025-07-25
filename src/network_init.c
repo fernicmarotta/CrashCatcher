@@ -148,6 +148,12 @@ int network_init(void) {
                BOOTLOADER_NETMASK2, BOOTLOADER_NETMASK3);
     uip_setnetmask(&netmask);
     
+    /* Set default router (gateway) - same subnet, .1 */
+    uip_ipaddr_t draddr;
+    uip_ipaddr(&draddr, BOOTLOADER_IP_ADDR0, BOOTLOADER_IP_ADDR1,
+               BOOTLOADER_IP_ADDR2, 1);  /* 192.168.204.1 */
+    uip_setdraddr(&draddr);
+    
     /* Initialize timers */
     timer_set(&periodic_timer, UIP_PERIODIC_TIMER_MS);
     timer_set(&arp_timer, UIP_ARP_TIMER_MS);
