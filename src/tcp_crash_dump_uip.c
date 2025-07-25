@@ -71,7 +71,8 @@ static const char* register_names[] = {
     "R0", "R1", "R2", "R3", "R4", "R5", "R6", "R7",
     "R8", "R9", "R10", "R11", "R12", "SP", "LR", "PC",
     "PSR", "MSP", "PSP", "CONTROL", "BASEPRI", "PRIMASK", 
-    "FAULTMASK", "FPSCR", "HFSR", "CFSR", "MMFAR", "BFAR", "AFSR", "NVIC_ISER0"
+    "FAULTMASK", "FPSCR", "HFSR", "CFSR", "MMFAR", "BFAR", "AFSR", "NVIC_ISER0",
+    "LR_AT_FAULT"
 };
 
 static void format_hex_byte(char *out, uint8_t byte);
@@ -241,7 +242,7 @@ void tcp_crash_dump_appcall(void) {
         case STATE_SENDING_REGISTERS:
             if (dump_state.send_buffer_pos >= dump_state.send_buffer_len) {
                 /* Prepare next register */
-                if (dump_state.current_region < 30) {  /* 30 registers total */
+                if (dump_state.current_region < 31) {  /* 31 registers total */
                     char line[64];
                     uint32_t value = 0;
                     
@@ -277,6 +278,7 @@ void tcp_crash_dump_appcall(void) {
                         case 27: value = dump_state.crash_info->bfar; break;
                         case 28: value = dump_state.crash_info->afsr; break;
                         case 29: value = dump_state.crash_info->nvic_iser0; break;
+                        case 30: value = dump_state.crash_info->lr_at_fault; break;
                     }
                     
                     snprintf(line, sizeof(line), "%s: ", register_names[dump_state.current_region]);

@@ -216,6 +216,10 @@ class CrashDumpServer:
         if line:
             print(line)
         
+        # Show LR_AT_FAULT if present
+        if 'LR_AT_FAULT' in self.registers:
+            print(f"LR_AT_FAULT: 0x{self.registers['LR_AT_FAULT']:08X} (EXC_RETURN)")
+        
         # Show control registers
         control_regs = ['CONTROL', 'BASEPRI', 'PRIMASK', 'FAULTMASK', 'FPSCR']
         print("\nCONTROL REGISTERS:")
@@ -739,6 +743,28 @@ class CrashDumpServer:
             f.write("echo \\n=== CPU Registers ===\\n\n")
             f.write("info registers\n\n")
             
+            # Check if we should use PSP based on EXC_RETURN value
+            f.write("# Check if we should use PSP based on EXC_RETURN\n")
+            lr_at_fault = self.registers.get('LR_AT_FAULT', 0)
+            if lr_at_fault:
+                f.write(f"# EXC_RETURN = 0x{lr_at_fault:08X}\n")
+                if lr_at_fault & 0x4:  # Bit 2 set means return to Thread mode (PSP)
+                    f.write("echo Using PSP for stack unwinding (Thread mode)...\\n\n")
+                    f.write("set $sp = $psp\n\n")
+                else:
+                    f.write("echo Using MSP for stack unwinding (Handler mode)...\\n\n") 
+                    f.write("set $sp = $msp\n\n")
+            else:
+                # Fallback to CONTROL register if no EXC_RETURN
+                f.write("# No EXC_RETURN available, using CONTROL register\n")
+                f.write("if ($control & 0x2)\n")
+                f.write("  echo Using PSP for stack unwinding...\\n\n")
+                f.write("  set $sp = $psp\n")
+                f.write("else\n")
+                f.write("  echo Using MSP for stack unwinding...\\n\n")
+                f.write("  set $sp = $msp\n")
+                f.write("end\n\n")
+            
             # Show backtrace
             f.write("# Show backtrace\n")
             f.write("echo \\n=== Backtrace ===\\n\n")
@@ -808,6 +834,21 @@ class CrashDumpServer:
             
             f.write("echo Thread detection complete - back at crash point\\n\n")
             f.write("info threads\n")
+            
+            # Check if we're in an exception handler by looking at LR
+            f.write("\n# Check if we're in an exception handler\n")
+            f.write("# ARM Cortex-M uses special EXC_RETURN values in LR\n")
+            f.write("if ($lr & 0xFFFFFFF0) == 0xFFFFFFE0 || ($lr & 0xFFFFFFF0) == 0xFFFFFFF0\n")
+            f.write("  printf \"=== Exception return detected (LR = 0x%08x) ===\\n\\n\", $lr\n")
+            f.write("  echo GDB should handle exception unwinding automatically\\n\\n")
+            f.write("  echo \\nPerforming backtrace...\\n\n")
+            f.write("  bt\n")
+            f.write("  echo \\n\n")
+            f.write("else\n")
+            f.write("  # Not in exception handler, normal backtrace\n")
+            f.write("  echo Normal execution context\\n\n")
+            f.write("  bt\n")
+            f.write("end\n\n")
             
             # Final status
             f.write("\necho \\n=== Crash dump loaded successfully! ===\\n\n")

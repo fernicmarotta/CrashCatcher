@@ -70,18 +70,18 @@ void crash_handler_common(uint32_t msp_value, uint32_t psp_value, uint32_t exc_r
     /* Save exception return value */
     crash_info->lr_at_fault = exc_return;
     
-    /* r4-r11 aren't automatically saved by exception entry
-     * For now, we'll leave them as zeros - a complete implementation
-     * would need assembly code to capture them before any push operations
+    /* r4-r11 were saved by our fault handler before the hardware frame
+     * They are located just below the hardware exception frame
      */
-    crash_info->r4 = 0;
-    crash_info->r5 = 0;
-    crash_info->r6 = 0;
-    crash_info->r7 = 0;
-    crash_info->r8 = 0;
-    crash_info->r9 = 0;
-    crash_info->r10 = 0;
-    crash_info->r11 = 0;
+    uint32_t* extended_frame = stack_frame - 8;  /* r4-r11 are 8 words below */
+    crash_info->r4 = extended_frame[0];   /* r4 */
+    crash_info->r5 = extended_frame[1];   /* r5 */
+    crash_info->r6 = extended_frame[2];   /* r6 */
+    crash_info->r7 = extended_frame[3];   /* r7 */
+    crash_info->r8 = extended_frame[4];   /* r8 */
+    crash_info->r9 = extended_frame[5];   /* r9 */
+    crash_info->r10 = extended_frame[6];  /* r10 */
+    crash_info->r11 = extended_frame[7];  /* r11 */
     
     /* Read fault status registers */
     crash_info->cfsr = SCB->CFSR;
@@ -158,11 +158,30 @@ void crash_handler_common(uint32_t msp_value, uint32_t psp_value, uint32_t exc_r
 void HardFault_Handler(void)
 {
     __asm volatile(
-        "mrs r0, msp             \n"  /* Get current MSP */
-        "mrs r1, psp             \n"  /* Get current PSP */
-        "mov r2, lr              \n"  /* Get EXC_RETURN */
-        "mov r3, #1              \n"  /* Fault type = 1 (HardFault) */
-        "b crash_handler_common  \n"
+        /* First, determine which stack was in use */
+        "tst lr, #4              \n"  /* Test EXC_RETURN bit 2 */
+        "ite eq                  \n"
+        "mrseq r0, msp           \n"  /* If 0, exception from Handler mode, use MSP */
+        "mrsne r0, psp           \n"  /* If 1, exception from Thread mode, use PSP */
+        
+        /* Now r0 points to the exception stack frame */
+        /* Push r4-r11 onto the exception stack frame to save their values */
+        "stmdb r0!, {r4-r11}     \n"  /* Save r4-r11 below the hardware frame */
+        
+        /* Prepare parameters for crash_handler_common */
+        "mrs r1, msp             \n"  /* Get current MSP */
+        "mrs r2, psp             \n"  /* Get current PSP */
+        "mov r3, lr              \n"  /* Get EXC_RETURN */
+        "push {r0}               \n"  /* Save updated stack pointer */
+        "mov r0, r1              \n"  /* First param: MSP */
+        "mov r1, r2              \n"  /* Second param: PSP */
+        "mov r2, r3              \n"  /* Third param: EXC_RETURN */
+        "mov r3, #1              \n"  /* Fourth param: Fault type = 1 (HardFault) */
+        "push {lr}               \n"  /* Save LR */
+        "bl crash_handler_common \n"
+        "pop {lr}                \n"  /* Should never return, but just in case */
+        "pop {r0}                \n"
+        "b .                     \n"  /* Infinite loop */
     );
 }
 
